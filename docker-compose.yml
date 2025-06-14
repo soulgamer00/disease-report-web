@@ -1,0 +1,123 @@
+# version: '3.8' # <--- CHANGED: ลบออกเนื่องจากเป็น attribute ที่ล้าสมัยแล้ว
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: disease-report-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dxdbadmin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      POSTGRES_DB: ${POSTGRES_DB:-diseasereport}
+      TZ: Asia/Bangkok
+      PGTZ: Asia/Bangkok
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "5433:5432"
+    networks:
+      - disease-report-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dxdbadmin} -d ${POSTGRES_DB:-diseasereport}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: ${NODE_ENV:-development}
+    container_name: disease-report-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      TZ: Asia/Bangkok
+      DATABASE_URL: postgresql://${POSTGRES_USER:-dxdbadmin}:${POSTGRES_PASSWORD:-123456}@postgres:5432/${POSTGRES_DB:-diseasereport}?schema=public
+      PORT: ${PORT:-3000}
+      HOST: ${HOST:-0.0.0.0}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      COOKIE_SECRET: ${COOKIE_SECRET}
+    volumes:
+      # <--- CHANGED: ปรับปรุงการ mount volume
+      # Mount source code ทั้งหมดสำหรับการพัฒนา (hot-reload)
+      - ./backend:/app
+      # ใช้ volume ของ container เองสำหรับ node_modules เพื่อป้องกันปัญหา OS Incompatibility
+      - /app/node_modules
+      # Mount timezone
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - disease-report-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================
+  # Prisma Studio (Development Only)
+  # ============================================
+  prisma-studio:
+    image: node:20-bookworm-slim
+    container_name: disease-report-prisma-studio
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      TZ: Asia/Bangkok
+    volumes:
+      - ./backend/prisma:/app/prisma:ro
+      - ./backend/package.json:/app/package.json
+      - ./backend/package-lock.json:/app/package-lock.json
+    ports:
+      - "5555:5555"
+    networks:
+      - disease-report-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "
+        # CHANGED: ติดตั้ง curl ก่อนเพื่อใช้ใน healthcheck
+        apt-get update && apt-get install -y curl &&
+        echo 'Installing Prisma Client...' &&
+        npm install --production=false &&
+        echo 'Starting Prisma Studio...' &&
+        npx prisma studio --hostname 0.0.0.0 --port 5555
+      "
+    profiles:
+      - development
+    healthcheck:
+      # CHANGED: เปลี่ยนมาใช้ curl แทน wget และใช้ test ที่ดีกว่า
+      test: ["CMD", "curl", "-f", "http://localhost:5555"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# ============================================
+# Network and Volume Configuration
+# ============================================
+networks:
+  disease-report-network:
+    driver: bridge
+    name: disease-report-network
+
+volumes:
+  postgres_data:
+    driver: local
+    name: disease-report-postgres-data

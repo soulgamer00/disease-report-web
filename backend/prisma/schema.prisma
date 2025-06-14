@@ -1,0 +1,261 @@
+// prisma/schema.prisma
+
+generator client {
+  provider        = "prisma-client-js"
+  // เพิ่มบรรทัดนี้ เพื่อบอก Prisma ให้ดาวน์โหลด Query Engine ที่เข้ากันได้กับ Debian + OpenSSL 3.0.x
+  binaryTargets   = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums ใช้ English identifiers แต่จะ map กับค่าภาษาไทยใน TypeScript
+enum NamePrefixEnum {
+  MR
+  MS
+  MRS
+  BOY
+  GIRL
+  OTHER
+}
+
+enum GenderEnum {
+  MALE
+  FEMALE
+}
+
+enum MaritalStatusEnum {
+  SINGLE
+  UNKNOWN
+  MONK
+  WIDOWED
+  DIVORCED
+  MARRIED
+  SEPARATED
+}
+
+enum OccupationEnum {
+  STUDENT
+  DEPENDENT
+  GOVERNMENT_OFFICIAL
+  STATE_ENTERPRISE
+  GENERAL_LABOR
+  PRIVATE_BUSINESS
+  FARMER
+  GOV_EMPLOYEE
+  PRIVATE_EMPLOYEE
+  HOMEMAKER
+  CLERGY
+  TRADER
+  UNEMPLOYED
+  OTHER
+}
+
+enum TreatmentAreaEnum {
+  MUNICIPALITY
+  SAO
+  UNKNOWN
+}
+
+enum PatientTypeEnum {
+  IPD
+  OPD
+  ACF
+}
+
+enum PatientConditionEnum {
+  UNKNOWN
+  RECOVERED
+  DIED
+  UNDER_TREATMENT
+}
+
+enum UserRoleEnum {
+  SUPERADMIN
+  ADMIN
+  USER
+}
+
+model PatientVisit {
+  id                      String            @id @default(uuid()) @map("uuid")
+  idCardCode              String
+  namePrefix              NamePrefixEnum
+  fname                   String
+  lname                   String
+  gender                  GenderEnum
+  birthday                DateTime          @db.Date
+  ageAtIllness            Int               // คำนวณอัตโนมัติจาก birthday และ illnessDate
+  nationality             String            @default("ไทย")
+  maritalStatus           MaritalStatusEnum
+  occupation              OccupationEnum
+  phoneNumber             String?
+  currentHouseNumber      String?
+  currentVillageNumber    String?
+  currentRoadName         String?
+  currentProvince         String?
+  currentDistrict         String?
+  currentSubDistrict      String?
+  addressSickHouseNumber  String?
+  addressSickVillageNumber String?
+  addressSickRoadName     String?
+  addressSickProvince     String            @default("เพชรบูรณ์")
+  addressSickDistrict     String?
+  addressSickSubDistrict  String?
+  diseaseId               String
+  disease                 Disease           @relation(fields: [diseaseId], references: [id])
+  symptomsOfDisease       String?
+  treatmentArea           TreatmentAreaEnum
+  treatmentHospital       String?
+  illnessDate             DateTime          @db.Date
+  treatmentDate           DateTime          @db.Date
+  diagnosisDate           DateTime          @db.Date
+  diagnosis1              String?
+  diagnosis2              String?
+  patientType             PatientTypeEnum
+  patientCondition        PatientConditionEnum
+  deathDate               DateTime?         @db.Date
+  causeOfDeath            String?
+  receivingProvince       String            @default("เพชรบูรณ์")
+  hospitalCode9eDigit     String
+  hospital                Hospital          @relation(fields: [hospitalCode9eDigit], references: [hospitalCode9eDigit])
+  reportName              String?
+  remarks                 String?
+  createdBy               String
+  createdAt               DateTime          @default(now()) @db.Timestamptz(3)
+  updatedBy               String?
+  updatedAt               DateTime          @updatedAt @db.Timestamptz(3)
+  isActive                Boolean           @default(true)
+
+  // Indexes สำหรับ Performance
+  @@index([hospitalCode9eDigit])
+  @@index([diseaseId])
+  @@index([illnessDate])
+  @@index([isActive])
+  @@index([hospitalCode9eDigit, isActive])
+  @@index([createdAt])
+  @@index([idCardCode]) // สำหรับค้นหาประวัติการมาโรงพยาบาลของคนเดียวกัน
+
+  @@map("patient_visits")
+}
+
+model Disease {
+  id           String         @id @default(uuid())
+  engName      String
+  thaiName     String
+  shortName    String
+  details      String?
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime       @updatedAt @db.Timestamptz(3)
+  symptoms     Symptom[]
+  patientVisits PatientVisit[]
+
+  // Soft Delete UNIQUE Constraints
+  @@unique([engName, isActive])
+  @@unique([thaiName, isActive])
+  @@unique([shortName, isActive])
+  @@index([isActive])
+
+  @@map("diseases")
+}
+
+model Symptom {
+  id        String   @id @default(uuid())
+  diseaseId String
+  disease   Disease  @relation(fields: [diseaseId], references: [id])
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  // Soft Delete UNIQUE Constraint
+  @@unique([diseaseId, name, isActive])
+  @@index([diseaseId])
+  @@index([isActive])
+
+  @@map("symptoms")
+}
+
+model Hospital {
+  id                  String         @id @default(uuid())
+  hospitalName        String
+  hospitalCode9eDigit String         @unique
+  hospitalCode9Digit  String?
+  hospitalCode5Digit  String?
+  organizationType    String?
+  healthServiceType   String?
+  affiliation         String?
+  departmentDivision  String?
+  isActive            Boolean        @default(true)
+  createdAt           DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime       @updatedAt @db.Timestamptz(3)
+  patientVisits       PatientVisit[]
+  populations         Population[]
+  users               User[]
+
+  // Soft Delete UNIQUE Constraint
+  @@unique([hospitalCode9eDigit, isActive])
+  @@index([isActive])
+  @@index([hospitalName])
+
+  @@map("hospitals")
+}
+
+model Population {
+  id                  String   @id @default(uuid())
+  year                Int
+  hospitalCode9eDigit String
+  hospital            Hospital @relation(fields: [hospitalCode9eDigit], references: [hospitalCode9eDigit])
+  count               Int
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+
+  // Soft Delete UNIQUE Constraint
+  @@unique([year, hospitalCode9eDigit, isActive])
+  @@index([hospitalCode9eDigit])
+  @@index([year])
+  @@index([isActive])
+
+  @@map("populations")
+}
+
+model User {
+  id                  String        @id @default(uuid())
+  username            String
+  password            String
+  userRole            UserRoleEnum
+  userRoleId          Int
+  name                String
+  hospitalCode9eDigit String?
+  hospital            Hospital?     @relation(fields: [hospitalCode9eDigit], references: [hospitalCode9eDigit])
+  isActive            Boolean       @default(true)
+  createdAt           DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime      @updatedAt @db.Timestamptz(3)
+  lastLoginAt         DateTime?     @db.Timestamptz(3)
+
+  // Soft Delete UNIQUE Constraint
+  @@unique([username, isActive])
+  @@index([hospitalCode9eDigit])
+  @@index([userRoleId])
+  @@index([isActive])
+
+  @@map("users")
+}
+
+model Permission {
+  id           String   @id @default(uuid())
+  roleId       Int
+  permissionCode String
+  canAccess    Boolean
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([roleId, permissionCode])
+  @@index([roleId])
+  @@index([permissionCode])
+
+  @@map("permissions")
+}

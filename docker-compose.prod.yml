@@ -1,0 +1,68 @@
+# docker-compose.prod.yml
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: disease-report-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: Asia/Bangkok
+      PGTZ: Asia/Bangkok
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    networks:
+      - disease-report-network-prod
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    # Build จาก Dockerfile ที่เราเพิ่งแก้ไข
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: disease-report-backend-prod
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Bangkok
+      # ชี้ DATABASE_URL ไปที่ service postgres ของ production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      # Secrets ทั้งหมดควรถูกจัดการผ่าน Environment Variables บน Server จริง
+      PORT: ${PORT}
+      HOST: ${HOST}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN}
+      COOKIE_SECRET: ${COOKIE_SECRET}
+    networks:
+      - disease-report-network-prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # healthcheck ยังคงมีประโยชน์
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  disease-report-network-prod:
+    driver: bridge
+    name: disease-report-network-prod
+
+volumes:
+  postgres_data_prod:
+    name: disease-report-postgres-data-prod
