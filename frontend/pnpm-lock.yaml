@@ -11,6 +11,9 @@ importers:
       chart.js:
         specifier: ^4.5.0
         version: 4.5.0
+      dayjs:
+        specifier: ^1.11.13
+        version: 1.11.13
       svelte-chartjs:
         specifier: ^3.1.5
         version: 3.1.5(chart.js@4.5.0)(svelte@5.34.3)
@@ -771,6 +774,9 @@ packages:
     resolution: {integrity: sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg==}
     engines: {node: '>=4'}
     hasBin: true
+
+  dayjs@1.11.13:
+    resolution: {integrity: sha512-oaMBel6gjolK862uaPQOVTA7q3TZhuSvuMQAAglQDOWYO9A91IrAOUJEyKVlqJlHE0vq5p5UXxzdPfMH/x6xNg==}
 
   debug@4.4.1:
     resolution: {integrity: sha512-KcKCqiftBJcZr++7ykoDIEwSa3XWowTfNPo92BYxjXiyYEVrUQh2aLyhxBCwww+heortUFxEJYcRzosstTEBYQ==}
@@ -2130,6 +2136,8 @@ snapshots:
       which: 2.0.2
 
   cssesc@3.0.0: {}
+
+  dayjs@1.11.13: {}
 
   debug@4.4.1:
     dependencies:

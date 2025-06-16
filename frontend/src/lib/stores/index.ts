@@ -353,8 +353,7 @@ export const createPersistedStore = <T>(
  */
 export const createDebouncedStore = <T>(initialValue: T, delay: number = 300) => {
   const { subscribe, set } = writable<T>(initialValue);
-  let timeout: NodeJS.Timeout;
-  
+let timeout: ReturnType<typeof setTimeout>;  
   return {
     subscribe,
     set: (value: T) => {
