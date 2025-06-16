@@ -1,6 +1,6 @@
-// src/lib/types/backend.ts
+// frontend/src/lib/types/backend.ts
 // Type definitions extracted from backend Zod schemas and Prisma enums
-// ✅ Corrected to match backend exactly
+// ✅ Single source of truth for frontend types
 
 // ============================================
 // BASE TYPES
@@ -37,7 +37,7 @@ export interface PaginatedResponse<T> {
 }
 
 // ============================================
-// ENUMS (matching Prisma Schema exactly)
+// ENUMS (matching Backend Prisma Schema exactly)
 // ============================================
 
 export enum UserRoleEnum {
@@ -110,7 +110,11 @@ export enum PatientConditionEnum {
 // THAI ENUM MAPPINGS
 // ============================================
 
-export const namePrefixMapping = {
+// Generic type for enum mappings
+type EnumMapping<T extends string> = Record<T, string>;
+
+// Name Prefix Mapping
+export const namePrefixMapping: EnumMapping<NamePrefixEnum> = {
   MR: 'นาย',
   MS: 'นางสาว',
   MRS: 'นาง',
@@ -119,12 +123,14 @@ export const namePrefixMapping = {
   OTHER: 'อื่นๆ',
 } as const;
 
-export const genderMapping = {
+// Gender Mapping
+export const genderMapping: EnumMapping<GenderEnum> = {
   MALE: 'ชาย',
   FEMALE: 'หญิง',
 } as const;
 
-export const maritalStatusMapping = {
+// Marital Status Mapping
+export const maritalStatusMapping: EnumMapping<MaritalStatusEnum> = {
   SINGLE: 'โสด',
   UNKNOWN: 'ไม่ทราบ',
   MONK: 'บรรพชิต',
@@ -134,7 +140,8 @@ export const maritalStatusMapping = {
   SEPARATED: 'แยกกันอยู่',
 } as const;
 
-export const occupationMapping = {
+// Occupation Mapping
+export const occupationMapping: EnumMapping<OccupationEnum> = {
   STUDENT: 'นักเรียน/นักศึกษา',
   DEPENDENT: 'ผู้อยู่ในอุปการะ',
   GOVERNMENT_OFFICIAL: 'ข้าราชการ',
@@ -151,30 +158,38 @@ export const occupationMapping = {
   OTHER: 'อื่นๆ',
 } as const;
 
-export const treatmentAreaMapping = {
+// Treatment Area Mapping
+export const treatmentAreaMapping: EnumMapping<TreatmentAreaEnum> = {
   MUNICIPALITY: 'เทศบาล',
   SAO: 'องค์การบริหารส่วนตำบล',
   UNKNOWN: 'ไม่ทราบ',
 } as const;
 
-export const patientTypeMapping = {
+// Patient Type Mapping
+export const patientTypeMapping: EnumMapping<PatientTypeEnum> = {
   IPD: 'ผู้ป่วยใน (IPD)',
   OPD: 'ผู้ป่วยนอก (OPD)',
   ACF: 'การค้นหาเชิงรุก (ACF)',
 } as const;
 
-export const patientConditionMapping = {
+// Patient Condition Mapping
+export const patientConditionMapping: EnumMapping<PatientConditionEnum> = {
   UNKNOWN: 'ไม่ทราบ',
   RECOVERED: 'หายแล้ว',
   DIED: 'เสียชีวิต',
   UNDER_TREATMENT: 'กำลังรักษา',
 } as const;
 
-export const userRoleMapping = {
+// User Role Mapping
+export const userRoleMapping: EnumMapping<UserRoleEnum> = {
   SUPERADMIN: 'ผู้ดูแลระบบหลัก',
   ADMIN: 'ผู้ดูแลระบบ',
   USER: 'ผู้ใช้งาน',
 } as const;
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
 
 // Helper functions for enum conversions
 export const getThaiNamePrefix = (prefix: NamePrefixEnum): string => namePrefixMapping[prefix];
@@ -186,43 +201,47 @@ export const getThaiPatientType = (type: PatientTypeEnum): string => patientType
 export const getThaiPatientCondition = (condition: PatientConditionEnum): string => patientConditionMapping[condition];
 export const getThaiUserRole = (role: UserRoleEnum): string => userRoleMapping[role];
 
-// ============================================
-// HOSPITAL TYPES
-// ============================================
+// Generate dropdown options from enums
+export const generateDropdownOptions = <T extends string>(
+  enumMapping: EnumMapping<T>
+): Array<{ value: T; label: string }> => {
+  return Object.entries(enumMapping).map(([value, label]) => ({
+    value: value as T,
+    label: label as string,
+  }));
+};
 
-export interface Hospital {
-  id: string;
-  hospitalName: string;
-  hospitalCode9eDigit: string;
-  organizationType?: string | null;
-  healthServiceType?: string | null;
-}
+// Pre-generated dropdown options for common use
+export const dropdownOptions = {
+  namePrefix: generateDropdownOptions(namePrefixMapping),
+  gender: generateDropdownOptions(genderMapping),
+  maritalStatus: generateDropdownOptions(maritalStatusMapping),
+  occupation: generateDropdownOptions(occupationMapping),
+  treatmentArea: generateDropdownOptions(treatmentAreaMapping),
+  patientType: generateDropdownOptions(patientTypeMapping),
+  patientCondition: generateDropdownOptions(patientConditionMapping),
+  userRole: generateDropdownOptions(userRoleMapping),
+} as const;
+
+// Export all mappings as a single object for easier access
+export const enumMappings = {
+  namePrefix: namePrefixMapping,
+  gender: genderMapping,
+  maritalStatus: maritalStatusMapping,
+  occupation: occupationMapping,
+  treatmentArea: treatmentAreaMapping,
+  patientType: patientTypeMapping,
+  patientCondition: patientConditionMapping,
+  userRole: userRoleMapping,
+} as const;
 
 // ============================================
-// USER & AUTH TYPES
+// AUTH TYPES
 // ============================================
-
-export interface UserInfo {
-  id: string;
-  username: string;
-  name: string;
-  userRole: UserRoleEnum;
-  userRoleId: number;
-  hospitalCode9eDigit: string | null;
-  hospital: Hospital | null;
-  lastLoginAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
 
 export interface LoginRequest {
   username: string;
   password: string;
-}
-
-export interface LoginResponse {
-  user: UserInfo;
-  expiresIn: string;
 }
 
 export interface ChangePasswordRequest {
@@ -231,29 +250,47 @@ export interface ChangePasswordRequest {
   confirmPassword: string;
 }
 
+export interface RefreshTokenRequest {
+  refreshToken?: string;
+}
+
+export interface UserInfo {
+  id: string;
+  username: string;
+  name: string;
+  userRoleId: number;
+  userRole: UserRoleEnum;
+  hospitalCode9eDigit: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt: string | null;
+  hospital?: {
+    id: string;
+    hospitalName: string;
+    hospitalCode9eDigit: string;
+  } | null;
+}
+
+export interface LoginResponse {
+  user: UserInfo;
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: string;
+}
+
 export interface ChangePasswordResponse {
   updatedAt: string;
 }
 
-export interface RefreshTokenRequest {
-  refreshToken: string;
-}
-
 export interface RefreshTokenResponse {
+  accessToken: string;
+  refreshToken: string;
   expiresIn: string;
 }
 
-export interface JwtPayload {
-  userId: string;
-  username: string;
-  userRoleId: number;
-  hospitalCode9eDigit: string | null;
-  iat: number;
-  exp: number;
-}
-
 // ============================================
-// DISEASE & SYMPTOM TYPES
+// PATIENT VISIT TYPES
 // ============================================
 
 export interface Disease {
@@ -261,91 +298,25 @@ export interface Disease {
   engName: string;
   thaiName: string;
   shortName: string;
-  details: string | null;
+  details?: string | null;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
-  isActive: boolean;
 }
 
 export interface DiseaseWithSymptoms extends Disease {
-  symptoms: Symptom[];
+  symptoms?: string[] | null;
 }
 
-export interface Symptom {
+export interface Hospital {
   id: string;
-  name: string;
-  diseaseId: string;
-  disease?: Disease;
-  createdAt: string;
-  updatedAt: string;
-  isActive: boolean;
-}
-
-// ============================================
-// PATIENT VISIT TYPES
-// ============================================
-
-export interface PatientVisitInfo {
-  id: string;
-  idCardCode: string;
-  namePrefix: NamePrefixEnum;
-  fname: string;
-  lname: string;
-  gender: GenderEnum;
-  birthday: string;
-  ageAtIllness: number;
-  nationality: string;
-  maritalStatus: MaritalStatusEnum;
-  occupation: OccupationEnum;
-  phoneNumber: string | null;
-  
-  // Current address
-  currentHouseNumber: string | null;
-  currentVillageNumber: string | null;
-  currentRoadName: string | null;
-  currentProvince: string | null;
-  currentDistrict: string | null;
-  currentSubDistrict: string | null;
-  
-  // Sick address
-  addressSickHouseNumber: string | null;
-  addressSickVillageNumber: string | null;
-  addressSickRoadName: string | null;
-  addressSickProvince: string;
-  addressSickDistrict: string | null;
-  addressSickSubDistrict: string | null;
-  
-  // Medical information
-  diseaseId: string;
-  symptomsOfDisease: string | null;
-  treatmentArea: TreatmentAreaEnum;
-  treatmentHospital: string | null;
-  illnessDate: string;
-  treatmentDate: string;
-  diagnosisDate: string | null;
-  diagnosis1: string | null;
-  diagnosis2: string | null;
-  patientType: PatientTypeEnum;
-  patientCondition: PatientConditionEnum;
-  deathDate: string | null;
-  causeOfDeath: string | null;
-  receivingProvince: string;
-  
-  // Hospital information
+  hospitalName: string;
   hospitalCode9eDigit: string;
-  reportName: string | null;
-  remarks: string | null;
-  
-  // Audit fields
+  organizationType?: string | null;
+  healthServiceType?: string | null;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
-  createdBy: string;
-  updatedBy: string;
-  isActive: boolean;
-  
-  // Relations
-  disease?: Disease;
-  hospital?: Hospital;
 }
 
 export interface PatientVisitSummary {
@@ -357,121 +328,61 @@ export interface PatientVisitSummary {
   gender: GenderEnum;
   birthday: string;
   ageAtIllness: number;
+  nationality: string;
   diseaseId: string;
-  disease: {
+  illnessDate: string;
+  treatmentDate: string;
+  diagnosisDate: string;
+  patientType: PatientTypeEnum;
+  patientCondition: PatientConditionEnum;
+  hospitalCode9eDigit: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  disease?: {
     id: string;
     engName: string;
     thaiName: string;
     shortName: string;
   };
-  illnessDate: string;
-  treatmentDate: string;
-  patientType: PatientTypeEnum;
-  patientCondition: PatientConditionEnum;
-  hospitalCode9eDigit: string;
-  hospital: {
+  hospital?: {
     id: string;
     hospitalName: string;
     hospitalCode9eDigit: string;
   };
 }
 
-export interface PatientVisitStatistics {
-  totalPatientVisits: number;
-  byGender: {
-    male: number;
-    female: number;
-  };
-  byPatientType: Record<string, number>;
-  byPatientCondition: Record<string, number>;
-  recentVisits: number;
-}
-
-export interface CreatePatientVisitRequest {
-  idCardCode: string;
-  namePrefix: NamePrefixEnum;
-  fname: string;
-  lname: string;
-  gender: GenderEnum;
-  birthday: string;
-  nationality?: string;
+export interface PatientVisitInfo extends PatientVisitSummary {
   maritalStatus: MaritalStatusEnum;
   occupation: OccupationEnum;
-  phoneNumber?: string;
-  currentHouseNumber?: string;
-  currentVillageNumber?: string;
-  currentRoadName?: string;
-  currentProvince?: string;
-  currentDistrict?: string;
-  currentSubDistrict?: string;
-  addressSickHouseNumber?: string;
-  addressSickVillageNumber?: string;
-  addressSickRoadName?: string;
-  addressSickProvince?: string;
-  addressSickDistrict?: string;
-  addressSickSubDistrict?: string;
-  diseaseId: string;
-  symptomsOfDisease?: string;
+  phoneNumber?: string | null;
+  currentHouseNumber?: string | null;
+  currentVillageNumber?: string | null;
+  currentRoadName?: string | null;
+  currentProvince?: string | null;
+  currentDistrict?: string | null;
+  currentSubDistrict?: string | null;
+  addressSickHouseNumber?: string | null;
+  addressSickVillageNumber?: string | null;
+  addressSickRoadName?: string | null;
+  addressSickProvince: string;
+  addressSickDistrict?: string | null;
+  addressSickSubDistrict?: string | null;
+  symptomsOfDisease?: string | null;
   treatmentArea: TreatmentAreaEnum;
-  treatmentHospital?: string;
-  illnessDate: string;
-  treatmentDate: string;
-  diagnosisDate?: string;
-  diagnosis1?: string;
-  diagnosis2?: string;
-  patientType: PatientTypeEnum;
-  patientCondition: PatientConditionEnum;
-  deathDate?: string;
-  causeOfDeath?: string;
-  receivingProvince?: string;
-  hospitalCode9eDigit?: string;
-  reportName?: string;
-  remarks?: string;
-}
-
-export interface UpdatePatientVisitRequest {
-  namePrefix?: NamePrefixEnum;
-  fname?: string;
-  lname?: string;
-  gender?: GenderEnum;
-  birthday?: string;
-  nationality?: string;
-  maritalStatus?: MaritalStatusEnum;
-  occupation?: OccupationEnum;
-  phoneNumber?: string;
-  currentHouseNumber?: string;
-  currentVillageNumber?: string;
-  currentRoadName?: string;
-  currentProvince?: string;
-  currentDistrict?: string;
-  currentSubDistrict?: string;
-  addressSickHouseNumber?: string;
-  addressSickVillageNumber?: string;
-  addressSickRoadName?: string;
-  addressSickProvince?: string;
-  addressSickDistrict?: string;
-  addressSickSubDistrict?: string;
-  diseaseId?: string;
-  symptomsOfDisease?: string;
-  treatmentArea?: TreatmentAreaEnum;
-  treatmentHospital?: string;
-  illnessDate?: string;
-  treatmentDate?: string;
-  diagnosisDate?: string;
-  diagnosis1?: string;
-  diagnosis2?: string;
-  patientType?: PatientTypeEnum;
-  patientCondition?: PatientConditionEnum;
-  deathDate?: string;
-  causeOfDeath?: string;
-  receivingProvince?: string;
-  hospitalCode9eDigit?: string;
-  reportName?: string;
-  remarks?: string;
+  treatmentHospital?: string | null;
+  diagnosis1?: string | null;
+  diagnosis2?: string | null;
+  deathDate?: string | null;
+  causeOfDeath?: string | null;
+  receivingProvince: string;
+  reportName?: string | null;
+  remarks?: string | null;
+  createdBy: string;
 }
 
 // ============================================
-// QUERY PARAMS
+// QUERY PARAMETERS
 // ============================================
 
 export interface QueryParams {
@@ -486,83 +397,64 @@ export interface QueryParams {
 export interface PatientVisitQueryParams extends QueryParams {
   diseaseId?: string;
   hospitalCode9eDigit?: string;
-  gender?: GenderEnum;
-  patientType?: PatientTypeEnum;
-  patientCondition?: PatientConditionEnum;
   startDate?: string;
   endDate?: string;
   ageMin?: number;
   ageMax?: number;
+  gender?: GenderEnum;
+  patientType?: PatientTypeEnum;
+  patientCondition?: PatientConditionEnum;
 }
 
 // ============================================
-// POPULATION TYPES
+// STATISTICS TYPES
 // ============================================
 
-export interface Population {
-  id: string;
-  year: number;
-  hospitalCode9eDigit: string;
-  hospital: Hospital;
-  totalPopulation: number;
-  malePopulation: number;
-  femalePopulation: number;
-  ageGroup0to4: number;
-  ageGroup5to9: number;
-  ageGroup10to14: number;
-  ageGroup15to19: number;
-  ageGroup20to24: number;
-  ageGroup25to29: number;
-  ageGroup30to34: number;
-  ageGroup35to39: number;
-  ageGroup40to44: number;
-  ageGroup45to49: number;
-  ageGroup50to54: number;
-  ageGroup55to59: number;
-  ageGroup60to64: number;
-  ageGroup65Plus: number;
-  createdAt: string;
-  updatedAt: string;
-  createdBy: string;
-  updatedBy: string;
-  isActive: boolean;
+export interface PatientVisitStatistics {
+  total: number;
+  byGender: Record<GenderEnum, number>;
+  byPatientType: Record<PatientTypeEnum, number>;
+  byPatientCondition: Record<PatientConditionEnum, number>;
+  byDisease: Array<{
+    diseaseId: string;
+    thaiName: string;
+    count: number;
+  }>;
+  byHospital: Array<{
+    hospitalCode9eDigit: string;
+    hospitalName: string;
+    count: number;
+  }>;
+  byMonth: Array<{
+    month: string;
+    count: number;
+  }>;
 }
 
 // ============================================
 // REPORT TYPES
 // ============================================
 
-export interface ReportQueryParams {
-  dateFrom?: string;
-  dateTo?: string;
-  hospitalCode?: string;
-  hospitalId?: string;
+export interface ReportQueryParams extends QueryParams {
   diseaseId?: string;
-  gender?: GenderEnum;
-  ageMin?: number;
-  ageMax?: number;
-  page?: number;
-  limit?: number;
+  hospitalCode9eDigit?: string;
+  startDate?: string;
+  endDate?: string;
+  reportType?: 'incidence' | 'gender' | 'trend';
 }
 
 export interface IncidenceDataQuery extends ReportQueryParams {
-  groupBy?: 'month' | 'quarter' | 'year' | 'hospital' | 'disease';
+  groupBy?: 'disease' | 'hospital' | 'month';
 }
 
 export interface GenderDataQuery extends ReportQueryParams {
-  groupBy?: 'age_group' | 'hospital' | 'disease' | 'month';
-}
-
-export interface TrendDataQuery extends ReportQueryParams {
-  groupBy?: 'day' | 'week' | 'month' | 'quarter' | 'year';
-  trendType?: 'patient_count' | 'incidence_rate' | 'gender_ratio';
+  ageGroup?: 'all' | 'children' | 'adults' | 'elderly';
 }
 
 export interface IncidenceDataItem {
-  period: string;
-  patientCount: number;
-  hospitalCode?: string;
-  hospitalName?: string;
+  group: string;
+  count: number;
+  rate?: number;
   diseaseCode?: string;
   diseaseName?: string;
 }
@@ -673,20 +565,23 @@ export type AllEnums =
   | PatientTypeEnum 
   | PatientConditionEnum;
 
-// Export all mappings as a single object for easier access
-export const enumMappings = {
-  namePrefix: namePrefixMapping,
-  gender: genderMapping,
-  maritalStatus: maritalStatusMapping,
-  occupation: occupationMapping,
-  treatmentArea: treatmentAreaMapping,
-  patientType: patientTypeMapping,
-  patientCondition: patientConditionMapping,
-  userRole: userRoleMapping,
-} as const;
-
-// Type definitions for frontend (to be inferred)
-export type EnumMappingType = typeof enumMappings;
-export type ThaiEnumValues = {
-  [K in keyof EnumMappingType]: EnumMappingType[K][keyof EnumMappingType[K]];
+// Validation helpers
+export const isValidEnum = <T extends string>(
+  value: unknown,
+  enumMapping: EnumMapping<T>
+): value is T => {
+  return typeof value === 'string' && value in enumMapping;
 };
+
+// Enum validators
+export const isValidGender = (value: unknown): value is GenderEnum => 
+  isValidEnum(value, genderMapping);
+
+export const isValidPatientType = (value: unknown): value is PatientTypeEnum => 
+  isValidEnum(value, patientTypeMapping);
+
+export const isValidPatientCondition = (value: unknown): value is PatientConditionEnum => 
+  isValidEnum(value, patientConditionMapping);
+
+export const isValidUserRole = (value: unknown): value is UserRoleEnum => 
+  isValidEnum(value, userRoleMapping);

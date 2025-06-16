@@ -27,6 +27,44 @@ interface CustomError extends Error {
 }
 
 // ============================================
+// ERROR MESSAGE CONSTANTS (Thai Only)
+// ============================================
+
+const ERROR_MESSAGES = {
+  // General Errors
+  INTERNAL_SERVER_ERROR: 'เกิดข้อผิดพลาดภายในระบบ',
+  ROUTE_NOT_FOUND: 'ไม่พบเส้นทางที่ร้องขอ',
+  INVALID_REQUEST: 'ข้อมูลที่ส่งมาไม่ถูกต้อง',
+  
+  // Authentication & Authorization
+  AUTHENTICATION_REQUIRED: 'กรุณาเข้าสู่ระบบเพื่อใช้งาน',
+  INVALID_TOKEN: 'รหัสการเข้าสู่ระบบไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่',
+  TOKEN_EXPIRED: 'รหัสการเข้าสู่ระบบหมดอายุ กรุณาเข้าสู่ระบบใหม่',
+  INSUFFICIENT_PERMISSIONS: 'ไม่มีสิทธิ์ในการดำเนินการนี้',
+  
+  // Database Errors
+  DUPLICATE_DATA: 'ข้อมูลนี้มีอยู่ในระบบแล้ว',
+  RECORD_NOT_FOUND: 'ไม่พบข้อมูลที่ต้องการ',
+  FOREIGN_KEY_CONSTRAINT: 'ไม่สามารถดำเนินการได้ เนื่องจากข้อมูลถูกใช้งานอยู่',
+  DATABASE_CONNECTION_ERROR: 'เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล',
+  DATABASE_VALIDATION_ERROR: 'ข้อมูลไม่ตรงตามข้อกำหนดของฐานข้อมูล',
+  
+  // Validation Errors
+  VALIDATION_ERROR: 'ข้อมูลที่กรอกไม่ถูกต้อง',
+  REQUIRED_FIELD_MISSING: 'กรุณากรอกข้อมูลที่จำเป็น',
+  INVALID_FORMAT: 'รูปแบบข้อมูลไม่ถูกต้อง',
+  
+  // File & Upload Errors
+  FILE_TOO_LARGE: 'ไฟล์มีขนาดใหญ่เกินกำหนด',
+  INVALID_FILE_TYPE: 'ประเภทไฟล์ไม่ได้รับอนุญาต',
+  FILE_UPLOAD_ERROR: 'เกิดข้อผิดพลาดในการอัปโหลดไฟล์',
+  
+  // Rate Limiting
+  TOO_MANY_REQUESTS: 'มีการใช้งานมากเกินไป กรุณาลองใหม่อีกครั้งในภายหลัง',
+  TOO_MANY_LOGIN_ATTEMPTS: 'การเข้าสู่ระบบล้มเหลวหลายครั้ง กรุณาลองใหม่อีกครั้งในภายหลัง',
+} as const;
+
+// ============================================
 // ERROR RESPONSE FORMATTER
 // ============================================
 
@@ -78,7 +116,7 @@ export const errorHandler = (
     res.status(400).json(
       createErrorResponse(
         req,
-        'ข้อมูลที่ส่งมาไม่ถูกต้อง',
+        ERROR_MESSAGES.VALIDATION_ERROR,
         'Validation failed',
         400,
         validationErrors
@@ -98,7 +136,7 @@ export const errorHandler = (
         res.status(409).json(
           createErrorResponse(
             req,
-            `ข้อมูล${field ? ` ${field.join(', ')} ` : ''}นี้มีอยู่ในระบบแล้ว`,
+            ERROR_MESSAGES.DUPLICATE_DATA,
             'Duplicate data',
             409,
             { field: field?.[0] || 'unknown' }
@@ -111,7 +149,7 @@ export const errorHandler = (
         res.status(404).json(
           createErrorResponse(
             req,
-            'ไม่พบข้อมูลที่ต้องการ',
+            ERROR_MESSAGES.RECORD_NOT_FOUND,
             'Record not found',
             404
           )
@@ -123,7 +161,7 @@ export const errorHandler = (
         res.status(400).json(
           createErrorResponse(
             req,
-            'ข้อมูลอ้างอิงไม่ถูกต้อง',
+            ERROR_MESSAGES.FOREIGN_KEY_CONSTRAINT,
             'Foreign key constraint failed',
             400
           )
@@ -135,7 +173,7 @@ export const errorHandler = (
         res.status(500).json(
           createErrorResponse(
             req,
-            'เกิดข้อผิดพลาดของระบบฐานข้อมูล',
+            ERROR_MESSAGES.DATABASE_CONNECTION_ERROR,
             'Database table not found',
             500
           )
@@ -146,7 +184,7 @@ export const errorHandler = (
         res.status(500).json(
           createErrorResponse(
             req,
-            'เกิดข้อผิดพลาดของฐานข้อมูล',
+            ERROR_MESSAGES.DATABASE_CONNECTION_ERROR,
             'Database error',
             500,
             config.server.nodeEnv === 'development' ? error.message : undefined
@@ -163,7 +201,7 @@ export const errorHandler = (
     res.status(400).json(
       createErrorResponse(
         req,
-        'ข้อมูลที่ส่งไม่ถูกต้องตามโครงสร้างฐานข้อมูล',
+        ERROR_MESSAGES.DATABASE_VALIDATION_ERROR,
         'Database validation error',
         400,
         config.server.nodeEnv === 'development' ? error.message : undefined
@@ -176,7 +214,7 @@ export const errorHandler = (
     res.status(500).json(
       createErrorResponse(
         req,
-        'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุของฐานข้อมูล',
+        ERROR_MESSAGES.DATABASE_CONNECTION_ERROR,
         'Unknown database error',
         500
       )
@@ -191,7 +229,7 @@ export const errorHandler = (
     res.status(401).json(
       createErrorResponse(
         req,
-        'Token ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่',
+        ERROR_MESSAGES.INVALID_TOKEN,
         'Invalid token',
         401
       )
@@ -203,7 +241,7 @@ export const errorHandler = (
     res.status(401).json(
       createErrorResponse(
         req,
-        'Token หมดอายุ กรุณาเข้าสู่ระบบใหม่',
+        ERROR_MESSAGES.TOKEN_EXPIRED,
         'Token expired',
         401
       )
@@ -228,13 +266,14 @@ export const errorHandler = (
   }
 
   // ============================================
-  // UNAUTHORIZED AND FORBIDDEN ERRORS
+  // AUTHORIZATION ERRORS
   // ============================================
-  if (error.message.includes('Authentication required') || error.message.includes('กรุณาเข้าสู่ระบบ')) {
+  if (error.message.includes('Authentication required') || 
+      error.message.includes('กรุณาเข้าสู่ระบบ')) {
     res.status(401).json(
       createErrorResponse(
         req,
-        'กรุณาเข้าสู่ระบบเพื่อเข้าถึงข้อมูลนี้',
+        ERROR_MESSAGES.AUTHENTICATION_REQUIRED,
         'Authentication required',
         401
       )
@@ -242,11 +281,13 @@ export const errorHandler = (
     return;
   }
 
-  if (error.message.includes('ไม่มีสิทธิ์') || error.message.includes('Permission denied')) {
+  if (error.message.includes('ไม่มีสิทธิ์') || 
+      error.message.includes('Permission denied') ||
+      error.message.includes('Insufficient permissions')) {
     res.status(403).json(
       createErrorResponse(
         req,
-        'ไม่มีสิทธิ์ในการดำเนินการนี้',
+        ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS,
         'Permission denied',
         403
       )
@@ -261,7 +302,7 @@ export const errorHandler = (
     res.status(400).json(
       createErrorResponse(
         req,
-        'รูปแบบข้อมูลไม่ถูกต้อง',
+        ERROR_MESSAGES.INVALID_FORMAT,
         'Invalid JSON syntax',
         400
       )
@@ -273,7 +314,7 @@ export const errorHandler = (
     res.status(500).json(
       createErrorResponse(
         req,
-        'เกิดข้อผิดพลาดในการประมวลผลข้อมูล',
+        ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
         'Type error',
         500,
         config.server.nodeEnv === 'development' ? error.message : undefined
@@ -288,7 +329,7 @@ export const errorHandler = (
   res.status(500).json(
     createErrorResponse(
       req,
-      'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์',
+      ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
       'Internal server error',
       500,
       config.server.nodeEnv === 'development' ? error.message : undefined
@@ -304,7 +345,7 @@ export const notFoundHandler = (req: Request, res: Response): void => {
   res.status(404).json(
     createErrorResponse(
       req,
-      `ไม่พบเส้นทาง ${req.method} ${req.originalUrl}`,
+      ERROR_MESSAGES.ROUTE_NOT_FOUND,
       'Route not found',
       404
     )
@@ -341,31 +382,43 @@ export class AppError extends Error {
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string = 'ข้อมูลไม่ถูกต้อง') {
+  constructor(message: string = ERROR_MESSAGES.VALIDATION_ERROR) {
     super(message, 400);
   }
 }
 
 export class NotFoundError extends AppError {
-  constructor(message: string = 'ไม่พบข้อมูลที่ต้องการ') {
+  constructor(message: string = ERROR_MESSAGES.RECORD_NOT_FOUND) {
     super(message, 404);
   }
 }
 
 export class UnauthorizedError extends AppError {
-  constructor(message: string = 'กรุณาเข้าสู่ระบบ') {
+  constructor(message: string = ERROR_MESSAGES.AUTHENTICATION_REQUIRED) {
     super(message, 401);
   }
 }
 
 export class ForbiddenError extends AppError {
-  constructor(message: string = 'ไม่มีสิทธิ์ในการดำเนินการนี้') {
+  constructor(message: string = ERROR_MESSAGES.INSUFFICIENT_PERMISSIONS) {
     super(message, 403);
   }
 }
 
 export class ConflictError extends AppError {
-  constructor(message: string = 'ข้อมูลซ้ำกับที่มีอยู่ในระบบ') {
+  constructor(message: string = ERROR_MESSAGES.DUPLICATE_DATA) {
     super(message, 409);
+  }
+}
+
+export class RateLimitError extends AppError {
+  constructor(message: string = ERROR_MESSAGES.TOO_MANY_REQUESTS) {
+    super(message, 429);
+  }
+}
+
+export class FileUploadError extends AppError {
+  constructor(message: string = ERROR_MESSAGES.FILE_UPLOAD_ERROR) {
+    super(message, 400);
   }
 }

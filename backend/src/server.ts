@@ -37,10 +37,14 @@ app.use(helmet({
 // CORS configuration
 app.use(cors(config.cors));
 
-// Rate limiting for auth endpoints
+// ============================================
+// RATE LIMITING CONFIGURATION
+// ============================================
+
+// Auth rate limiter - stricter for authentication endpoints
 const authLimiter = rateLimit({
-  windowMs: config.security.rateLimitWindowMs,
-  max: config.security.rateLimitMax,
+  windowMs: config.security.rateLimitWindowMs, // 15 minutes
+  max: config.server.nodeEnv === 'development' ? 50 : config.security.rateLimitMax, // 50 in dev, 5 in prod
   message: {
     success: false,
     message: 'มีการร้องขอเข้าสู่ระบบมากเกินไป กรุณาลองใหม่อีกครั้งในภายหลัง',
@@ -49,46 +53,61 @@ const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting in development for easier testing
   skip: (req: Request): boolean => {
-    // Skip rate limiting in development for easier testing
-    return config.server.nodeEnv === 'development';
+    if (config.server.nodeEnv === 'development' && req.ip === '127.0.0.1') {
+      return true;
+    }
+    return false;
   },
 });
 
 // Apply rate limiting to auth routes only
 app.use('/api/auth', authLimiter);
 
-// General rate limiting for all API routes
+// General rate limiter - more lenient for general API usage
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // Limit each IP to 1000 requests per windowMs
+  max: config.server.nodeEnv === 'development' ? 2000 : 1000, // Higher limit in dev
   message: {
     success: false,
-    message: 'มีการร้องขอมากเกินไป กรุณาลองใหม่อีกครั้งในภายหลัง',
+    message: 'คำขอมากเกินไป กรุณาลองใหม่อีกครั้งในภายหลัง',
     error: 'Too many requests',
     timestamp: new Date().toISOString(),
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting for localhost in development
   skip: (req: Request): boolean => {
-    return config.server.nodeEnv === 'development';
+    if (config.server.nodeEnv === 'development') {
+      const ip = req.ip || '';
+      return ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.');
+    }
+    return false;
   },
 });
 
+// Apply general rate limiting to all API routes
 app.use('/api', generalLimiter);
 
 // ============================================
-// BODY PARSING MIDDLEWARE
+// PARSING MIDDLEWARE
 // ============================================
 
+// Body parsing middleware
 app.use(express.json({ 
   limit: '10mb',
-  type: 'application/json',
+  strict: true,
+  type: 'application/json'
 }));
+
 app.use(express.urlencoded({ 
   extended: true, 
   limit: '10mb',
+  parameterLimit: 1000
 }));
+
+// Cookie parser middleware
 app.use(cookieParser(config.cookie.secret));
 
 // ============================================
@@ -97,27 +116,87 @@ app.use(cookieParser(config.cookie.secret));
 
 if (config.server.nodeEnv === 'development') {
   app.use((req: Request, res: Response, next: NextFunction) => {
-    const timestamp = new Date().toISOString();
-    const userAgent = req.get('User-Agent') || 'Unknown';
-    const ip = req.ip || req.connection.remoteAddress || 'Unknown';
+    const start = Date.now();
     
-    console.log(`[${timestamp}] ${req.method} ${req.url} - IP: ${ip} - User-Agent: ${userAgent}`);
-    
-    // Log request body for POST/PUT/PATCH (excluding sensitive data)
-    if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {
-      const sanitizedBody = { ...req.body };
-      // Remove sensitive fields from logs
-      if (sanitizedBody.password) sanitizedBody.password = '[REDACTED]';
-      if (sanitizedBody.currentPassword) sanitizedBody.currentPassword = '[REDACTED]';
-      if (sanitizedBody.newPassword) sanitizedBody.newPassword = '[REDACTED]';
-      if (sanitizedBody.confirmPassword) sanitizedBody.confirmPassword = '[REDACTED]';
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      const statusColor = res.statusCode >= 400 ? '\x1b[31m' : '\x1b[32m'; // Red for errors, green for success
+      const resetColor = '\x1b[0m';
       
-      console.log(`[${timestamp}] Request Body:`, JSON.stringify(sanitizedBody, null, 2));
-    }
+      console.log(
+        `${new Date().toISOString()} ` +
+        `${req.method} ${req.originalUrl} ` +
+        `${statusColor}${res.statusCode}${resetColor} ` +
+        `${duration}ms ` +
+        `${req.ip || 'unknown'}`
+      );
+    });
     
     next();
   });
 }
+
+// ============================================
+// PARSING MIDDLEWARE
+// ============================================
+
+// Body parsing middleware
+app.use(express.json({ 
+  limit: '10mb',
+  strict: true,
+  type: 'application/json'
+}));
+
+app.use(express.urlencoded({ 
+  extended: true, 
+  limit: '10mb',
+  parameterLimit: 1000
+}));
+
+// Cookie parser middleware
+app.use(cookieParser(config.cookie.secret));
+
+// ============================================
+// REQUEST LOGGING MIDDLEWARE (Development only)
+// ============================================
+
+if (config.server.nodeEnv === 'development') {
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const start = Date.now();
+    
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      const statusColor = res.statusCode >= 400 ? '\x1b[31m' : '\x1b[32m';
+      const resetColor = '\x1b[0m';
+      
+      console.log(
+        `${new Date().toISOString()} ` +
+        `${req.method} ${req.originalUrl} ` +
+        `${statusColor}${res.statusCode}${resetColor} ` +
+        `${duration}ms ` +
+        `${req.ip || 'unknown'}`
+      );
+    });
+    
+    next();
+  });
+}
+
+// ============================================
+// ROOT ENDPOINT
+// ============================================
+
+app.get('/', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'Disease Report System API',
+    version: '1.0.0',
+    documentation: '/api',
+    health: '/health',
+    timestamp: new Date().toISOString(),
+    timezone: config.constants?.timezone || 'Asia/Bangkok',
+  });
+});
 
 // ============================================
 // HEALTH CHECK ENDPOINT
@@ -129,7 +208,7 @@ app.get('/health', (req: Request, res: Response) => {
     message: 'Disease Report API is running',
     timestamp: new Date().toISOString(),
     environment: config.server.nodeEnv,
-    timezone: config.constants.timezone,
+    timezone: config.constants?.timezone || 'Asia/Bangkok',
     uptime: Math.floor(process.uptime()),
     memory: {
       used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
@@ -152,101 +231,83 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 // ============================================
-// API ROOT ENDPOINT
-// ============================================
-
-app.get('/', (req: Request, res: Response) => {
-  res.json({
-    success: true,
-    message: 'Disease Report System API',
-    version: '1.0.0',
-    documentation: '/api',
-    health: '/health',
-    timestamp: new Date().toISOString(),
-    timezone: config.constants.timezone,
-  });
-});
-
-// ============================================
 // API ROUTES
 // ============================================
 
-// Mount API routes BEFORE error handlers
+// Mount API routes
 app.use('/api', apiRoutes);
 
 // ============================================
 // ERROR HANDLING MIDDLEWARE
 // ============================================
 
-// 404 Handler - Must be AFTER all routes but BEFORE error handler
+// 404 Handler for undefined routes
 app.use('*', notFoundHandler);
 
-// Global Error Handler - Must be LAST middleware
+// Global error handler (must be last)
 app.use(errorHandler);
 
 // ============================================
 // SERVER STARTUP
 // ============================================
 
-const startServer = (): void => {
-  try {
-    const server = app.listen(config.server.port, config.server.host, () => {
-      console.log(`
+const PORT = config.server.port;
+const HOST = config.server.host;
+
+const server = app.listen(PORT, HOST, () => {
+  console.log(`
 🚀 Disease Report API Server Started Successfully!
 📍 Environment: ${config.server.nodeEnv}
-🌐 URL: http://${config.server.host}:${config.server.port}
-🏥 Health Check: http://${config.server.host}:${config.server.port}/health
-📚 API Documentation: http://${config.server.host}:${config.server.port}/api
-🕐 Timezone: ${config.constants.timezone}
+🌐 URL: http://${HOST}:${PORT}
+🏥 Health Check: http://${HOST}:${PORT}/health
+📚 API Documentation: http://${HOST}:${PORT}/api
+🕐 Timezone: ${config.constants?.timezone || 'Asia/Bangkok'}
 ⏰ Started at: ${new Date().toISOString()}
-      `);
-    });
-
-    // Graceful shutdown handling
-    const gracefulShutdown = (signal: string): void => {
-      console.log(`\n📡 Received ${signal}. Graceful shutdown initiated...`);
-      
-      server.close((err?: Error) => {
-        if (err) {
-          console.error('❌ Error during server shutdown:', err);
-          process.exit(1);
-        }
-        
-        console.log('✅ HTTP server closed.');
-        console.log('🔌 Database connections will be closed by Prisma.');
-        console.log('👋 Graceful shutdown completed.');
-        process.exit(0);
-      });
-
-      // Force shutdown after 30 seconds
-      setTimeout(() => {
-        console.error('⚠️  Forced shutdown after 30 seconds');
-        process.exit(1);
-      }, 30000);
-    };
-
-    // Handle shutdown signals
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-    // Handle uncaught exceptions and unhandled rejections
-    process.on('uncaughtException', (error: Error) => {
-      console.error('💥 Uncaught Exception:', error);
-      gracefulShutdown('UNCAUGHT_EXCEPTION');
-    });
-
-    process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
-      console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
-      gracefulShutdown('UNHANDLED_REJECTION');
-    });
-
-  } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    process.exit(1);
+  `);
+  
+  if (config.server.nodeEnv === 'development') {
+    console.log('🔧 Development mode: Rate limiting relaxed');
+    console.log('📊 Request logging enabled');
   }
+});
+
+// ============================================
+// GRACEFUL SHUTDOWN
+// ============================================
+
+const gracefulShutdown = (signal: string) => {
+  console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
+  
+  server.close((err) => {
+    if (err) {
+      console.error('❌ Error during server shutdown:', err);
+      process.exit(1);
+    }
+    
+    console.log('✅ Server closed successfully');
+    process.exit(0);
+  });
+  
+  // Force close after 10 seconds
+  setTimeout(() => {
+    console.log('⏰ Forcing server shutdown after timeout');
+    process.exit(1);
+  }, 10000);
 };
 
-// Start the server
-startServer();
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('💥 Uncaught Exception:', error);
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('UNHANDLED_REJECTION');
+});
 
 export default app;

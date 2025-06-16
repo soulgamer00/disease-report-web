@@ -1,6 +1,7 @@
 // backend/src/utils/export.utils.ts
 
 import { Response } from 'express';
+import * as ExcelJS from 'exceljs';
 import { PatientVisitInfo } from '../schemas/patientVisit.schema';
 import { 
   namePrefixMapping, 
@@ -41,22 +42,172 @@ export class ExportUtils {
       const defaultFilename = `patient-visits-${new Date().toISOString().split('T')[0]}.xlsx`;
       const exportFilename = filename || defaultFilename;
 
-      // Prepare Excel data
-      const excelData = this.preparePatientVisitExcelData(patientVisits);
+      // Create a new workbook and worksheet
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('รายงานข้อมูลผู้ป่วย');
 
-      // For now, return CSV format (Excel implementation would require additional library)
-      // In production, you would use libraries like 'exceljs' or 'xlsx'
-      const csvData = this.convertToCSV(excelData);
+      // Set worksheet properties
+      worksheet.properties.defaultRowHeight = 20;
+      worksheet.views = [{ showGridLines: true }];
 
-      // Set response headers for file download
-      response.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      response.setHeader('Content-Disposition', `attachment; filename="${exportFilename.replace('.xlsx', '.csv')}"`);
+      // Define columns with Thai headers
+      const columns = [
+        { header: 'ลำดับ', key: 'no', width: 8 },
+        { header: 'เลขบัตรประจำตัว', key: 'idCardCode', width: 15 },
+        { header: 'คำนำหน้า', key: 'namePrefix', width: 10 },
+        { header: 'ชื่อ', key: 'fname', width: 15 },
+        { header: 'นามสกุล', key: 'lname', width: 15 },
+        { header: 'เพศ', key: 'gender', width: 8 },
+        { header: 'วันเกิด', key: 'birthday', width: 12 },
+        { header: 'อายุเมื่อป่วย', key: 'ageAtIllness', width: 12 },
+        { header: 'สัญชาติ', key: 'nationality', width: 10 },
+        { header: 'สถานภาพ', key: 'maritalStatus', width: 12 },
+        { header: 'อาชีพ', key: 'occupation', width: 15 },
+        { header: 'เบอร์โทร', key: 'phoneNumber', width: 12 },
+        { header: 'จังหวัดที่อยู่', key: 'currentProvince', width: 15 },
+        { header: 'อำเภอที่อยู่', key: 'currentDistrict', width: 15 },
+        { header: 'ตำบลที่อยู่', key: 'currentSubDistrict', width: 15 },
+        { header: 'จังหวัดที่ป่วย', key: 'addressSickProvince', width: 15 },
+        { header: 'อำเภอที่ป่วย', key: 'addressSickDistrict', width: 15 },
+        { header: 'ตำบลที่ป่วย', key: 'addressSickSubDistrict', width: 15 },
+        { header: 'โรค', key: 'diseaseThaiName', width: 20 },
+        { header: 'อาการของโรค', key: 'symptomsOfDisease', width: 25 },
+        { header: 'พื้นที่รักษา', key: 'treatmentArea', width: 12 },
+        { header: 'โรงพยาบาลที่รักษา', key: 'treatmentHospital', width: 20 },
+        { header: 'วันที่ป่วย', key: 'illnessDate', width: 12 },
+        { header: 'วันที่รักษา', key: 'treatmentDate', width: 12 },
+        { header: 'วันที่วินิจฉัย', key: 'diagnosisDate', width: 12 },
+        { header: 'การวินิจฉัย 1', key: 'diagnosis1', width: 20 },
+        { header: 'การวินิจฉัย 2', key: 'diagnosis2', width: 20 },
+        { header: 'ประเภทผู้ป่วย', key: 'patientType', width: 12 },
+        { header: 'สภาพผู้ป่วย', key: 'patientCondition', width: 12 },
+        { header: 'วันที่เสียชีวิต', key: 'deathDate', width: 12 },
+        { header: 'สาเหตุการเสียชีวิต', key: 'causeOfDeath', width: 20 },
+        { header: 'จังหวัดรับผิดชอบ', key: 'receivingProvince', width: 15 },
+        { header: 'รหัสโรงพยาบาล', key: 'hospitalCode9eDigit', width: 12 },
+        { header: 'ชื่อผู้รายงาน', key: 'reportName', width: 15 },
+        { header: 'หมายเหตุ', key: 'remarks', width: 25 },
+      ];
+
+      worksheet.columns = columns;
+
+      // Style the header row
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true, size: 12 };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE6F3FF' } // Light blue background
+      };
+      headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+      headerRow.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+
+      // Add data rows
+      patientVisits.forEach((visit, index) => {
+        const rowData = {
+          no: index + 1,
+          idCardCode: visit.idCardCode,
+          namePrefix: namePrefixMapping[visit.namePrefix] || visit.namePrefix,
+          fname: visit.fname,
+          lname: visit.lname,
+          gender: genderMapping[visit.gender] || visit.gender,
+          birthday: this.formatDate(visit.birthday),
+          ageAtIllness: visit.ageAtIllness,
+          nationality: visit.nationality,
+          maritalStatus: maritalStatusMapping[visit.maritalStatus] || visit.maritalStatus,
+          occupation: occupationMapping[visit.occupation] || visit.occupation,
+          phoneNumber: visit.phoneNumber || '-',
+          currentProvince: visit.currentProvince || '-',
+          currentDistrict: visit.currentDistrict || '-',
+          currentSubDistrict: visit.currentSubDistrict || '-',
+          addressSickProvince: visit.addressSickProvince,
+          addressSickDistrict: visit.addressSickDistrict || '-',
+          addressSickSubDistrict: visit.addressSickSubDistrict || '-',
+          diseaseThaiName: visit.disease?.thaiName || '-',
+          symptomsOfDisease: visit.symptomsOfDisease || '-',
+          treatmentArea: treatmentAreaMapping[visit.treatmentArea] || visit.treatmentArea,
+          treatmentHospital: visit.treatmentHospital || visit.hospital?.hospitalName || '-',
+          illnessDate: this.formatDate(visit.illnessDate),
+          treatmentDate: this.formatDate(visit.treatmentDate),
+          diagnosisDate: this.formatDate(visit.diagnosisDate),
+          diagnosis1: visit.diagnosis1 || '-',
+          diagnosis2: visit.diagnosis2 || '-',
+          patientType: patientTypeMapping[visit.patientType] || visit.patientType,
+          patientCondition: patientConditionMapping[visit.patientCondition] || visit.patientCondition,
+          deathDate: visit.deathDate ? this.formatDate(visit.deathDate) : '-',
+          causeOfDeath: visit.causeOfDeath || '-',
+          receivingProvince: visit.receivingProvince,
+          hospitalCode9eDigit: visit.hospitalCode9eDigit,
+          reportName: visit.reportName || '-',
+          remarks: visit.remarks || '-',
+        };
+
+        const row = worksheet.addRow(rowData);
+        
+        // Style data rows
+        row.alignment = { vertical: 'middle', wrapText: true };
+        row.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+
+        // Alternate row colors for better readability
+        if (index % 2 === 1) {
+          row.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF8F8F8' } // Very light gray
+          };
+        }
+      });
+
+      // Add title row at the top (insert before headers)
+      worksheet.insertRow(1, []);
+      const titleRow = worksheet.getRow(1);
+      const titleText = hospitalName 
+        ? `รายงานข้อมูลผู้ป่วย - ${hospitalName}` 
+        : 'รายงานข้อมูลผู้ป่วย';
+      
+      titleRow.getCell(1).value = titleText;
+      titleRow.getCell(1).font = { bold: true, size: 16 };
+      titleRow.getCell(1).alignment = { horizontal: 'center' };
+      
+      // Merge title across all columns
+      worksheet.mergeCells(1, 1, 1, columns.length);
+
+      // Add summary row
+      worksheet.insertRow(2, []);
+      const summaryRow = worksheet.getRow(2);
+      summaryRow.getCell(1).value = `รวมทั้งหมด: ${patientVisits.length} รายการ | วันที่ส่งออก: ${new Date().toLocaleDateString('th-TH')}`;
+      summaryRow.getCell(1).font = { size: 12 };
+      summaryRow.getCell(1).alignment = { horizontal: 'center' };
+      worksheet.mergeCells(2, 1, 2, columns.length);
+
+      // Add empty row before headers
+      worksheet.insertRow(3, []);
+
+      // Auto-fit columns (approximate)
+      worksheet.columns.forEach(column => {
+        if (column.width && column.width < 10) {
+          column.width = 10;
+        }
+      });
+
+      // Set response headers for Excel download
+      response.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      response.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(exportFilename)}"`);
       response.setHeader('Cache-Control', 'no-cache');
       response.setHeader('Pragma', 'no-cache');
 
-      // Add BOM for UTF-8 encoding (for proper Thai character display in Excel)
-      const bom = '\uFEFF';
-      response.write(bom + csvData);
+      // Write Excel file to response
+      await workbook.xlsx.write(response);
       response.end();
 
     } catch (error) {
@@ -66,420 +217,93 @@ export class ExportUtils {
   }
 
   // ============================================
-  // DATA PREPARATION
+  // HELPER METHODS
   // ============================================
 
   /**
-   * Prepare patient visit data for Excel export
-   * @param patientVisits - Array of patient visit data
-   * @returns Formatted data for Excel
+   * Format Date to Thai format (DD/MM/YYYY)
+   * @param date - Date object or string
+   * @returns Formatted date string
    */
-  private static preparePatientVisitExcelData(patientVisits: PatientVisitInfo[]): Array<Record<string, string | number | null>> {
-    const headers = [
-      'ลำดับ',
-      'เลขบัตรประจำตัวประชาชน',
-      'คำนำหน้าชื่อ',
-      'ชื่อ',
-      'นามสกุล',
-      'เพศ',
-      'วันเกิด',
-      'อายุ ณ วันที่ป่วย',
-      'สัญชาติ',
-      'สถานภาพสมรส',
-      'อาชีพ',
-      'เบอร์โทรศัพท์',
-      'ที่อยู่ปัจจุบัน - เลขที่',
-      'ที่อยู่ปัจจุบัน - หมู่ที่',
-      'ที่อยู่ปัจจุบัน - ถนน',
-      'ที่อยู่ปัจจุบัน - จังหวัด',
-      'ที่อยู่ปัจจุบัน - อำเภอ',
-      'ที่อยู่ปัจจุบัน - ตำบล',
-      'ที่อยู่เมื่อป่วย - เลขที่',
-      'ที่อยู่เมื่อป่วย - หมู่ที่',
-      'ที่อยู่เมื่อป่วย - ถนน',
-      'ที่อยู่เมื่อป่วย - จังหวัด',
-      'ที่อยู่เมื่อป่วย - อำเภอ',
-      'ที่อยู่เมื่อป่วย - ตำบล',
-      'โรค (ภาษาไทย)',
-      'โรค (ภาษาอังกฤษ)',
-      'รหัสโรค',
-      'อาการของโรค',
-      'พื้นที่การรักษา',
-      'โรงพยาบาลที่รักษา',
-      'วันที่เริ่มป่วย',
-      'วันที่เริ่มรักษา',
-      'วันที่วินิจฉัย',
-      'การวินิจฉัยหลัก',
-      'การวินิจฉัยรอง',
-      'ประเภทผู้ป่วย',
-      'สภาพผู้ป่วย',
-      'วันที่เสียชีวิต',
-      'สาเหตุการเสียชีวิต',
-      'จังหวัดที่รับการรายงาน',
-      'รหัสโรงพยาบาล',
-      'ชื่อโรงพยาบาล',
-      'ประเภทองค์กร',
-      'ประเภทหน่วยบริการสุขภาพ',
-      'ชื่อผู้รายงาน',
-      'หมายเหตุ',
-      'วันที่บันทึกข้อมูล',
-      'วันที่แก้ไขล่าสุด'
-    ];
-
-    const excelData: Array<Record<string, string | number | null>> = [];
-
-    // Add header row
-    const headerRow: Record<string, string | number | null> = {};
-    headers.forEach((header, index) => {
-      headerRow[`col${index}`] = header;
-    });
-    excelData.push(headerRow);
-
-    // Add data rows
-    patientVisits.forEach((visit, index) => {
-      const row: Record<string, string | number | null> = {
-        col0: index + 1, // ลำดับ
-        col1: visit.idCardCode,
-        col2: namePrefixMapping[visit.namePrefix] || visit.namePrefix,
-        col3: visit.fname,
-        col4: visit.lname,
-        col5: genderMapping[visit.gender] || visit.gender,
-        col6: this.formatDate(visit.birthday),
-        col7: visit.ageAtIllness,
-        col8: visit.nationality,
-        col9: maritalStatusMapping[visit.maritalStatus] || visit.maritalStatus,
-        col10: occupationMapping[visit.occupation] || visit.occupation,
-        col11: visit.phoneNumber,
-        col12: visit.currentHouseNumber,
-        col13: visit.currentVillageNumber,
-        col14: visit.currentRoadName,
-        col15: visit.currentProvince,
-        col16: visit.currentDistrict,
-        col17: visit.currentSubDistrict,
-        col18: visit.addressSickHouseNumber,
-        col19: visit.addressSickVillageNumber,
-        col20: visit.addressSickRoadName,
-        col21: visit.addressSickProvince,
-        col22: visit.addressSickDistrict,
-        col23: visit.addressSickSubDistrict,
-        col24: visit.disease?.thaiName || 'ไม่ทราบ',
-        col25: visit.disease?.engName || 'Unknown',
-        col26: visit.disease?.shortName || 'N/A',
-        col27: visit.symptomsOfDisease,
-        col28: treatmentAreaMapping[visit.treatmentArea] || visit.treatmentArea,
-        col29: visit.treatmentHospital,
-        col30: this.formatDate(visit.illnessDate),
-        col31: this.formatDate(visit.treatmentDate),
-        col32: this.formatDate(visit.diagnosisDate),
-        col33: visit.diagnosis1,
-        col34: visit.diagnosis2,
-        col35: patientTypeMapping[visit.patientType] || visit.patientType,
-        col36: patientConditionMapping[visit.patientCondition] || visit.patientCondition,
-        col37: visit.deathDate ? this.formatDate(visit.deathDate) : null,
-        col38: visit.causeOfDeath,
-        col39: visit.receivingProvince,
-        col40: visit.hospitalCode9eDigit,
-        col41: visit.hospital?.hospitalName || 'ไม่ทราบ',
-        col42: visit.hospital?.organizationType || 'ไม่ทราบ',
-        col43: visit.hospital?.healthServiceType || 'ไม่ทราบ',
-        col44: visit.reportName,
-        col45: visit.remarks,
-        col46: this.formatDateTime(visit.createdAt),
-        col47: this.formatDateTime(visit.updatedAt),
-      };
-      excelData.push(row);
-    });
-
-    return excelData;
-  }
-
-  // ============================================
-  // CSV CONVERSION
-  // ============================================
-
-  /**
-   * Convert data to CSV format
-   * @param data - Array of data objects
-   * @returns CSV string
-   */
-  private static convertToCSV(data: Array<Record<string, string | number | null>>): string {
-    if (data.length === 0) return '';
-
-    // Get all column keys from first row
-    const firstRow = data[0];
-    const columnKeys = Object.keys(firstRow).sort();
-
-    // Create CSV rows
-    const csvRows: string[] = [];
-
-    data.forEach(row => {
-      const csvRow = columnKeys.map(key => {
-        const value = row[key];
-        
-        // Handle null/undefined values
-        if (value === null || value === undefined) {
-          return '';
-        }
-
-        // Convert to string and escape CSV special characters
-        const stringValue = String(value);
-        
-        // If value contains comma, newline, or quote, wrap in quotes and escape quotes
-        if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
-          return `"${stringValue.replace(/"/g, '""')}"`;
-        }
-        
-        return stringValue;
-      });
+  private static formatDate(date: Date | string): string {
+    try {
+      const dateObj = typeof date === 'string' ? new Date(date) : date;
+      if (isNaN(dateObj.getTime())) return '-';
       
-      csvRows.push(csvRow.join(','));
-    });
-
-    return csvRows.join('\n');
+      return dateObj.toLocaleDateString('th-TH', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        timeZone: config.constants.timezone
+      });
+    } catch (error) {
+      console.error('Date formatting error:', error);
+      return '-';
+    }
   }
 
-  // ============================================
-  // STATISTICS EXPORT
-  // ============================================
-
   /**
-   * Export patient visit statistics to CSV
-   * @param statistics - Statistics data
+   * Export statistics data to Excel
+   * @param statisticsData - Statistics data object
    * @param response - Express response object
    * @param filename - Optional filename
    */
-  static async exportStatisticsToCSV(
-    statistics: {
-      totalPatients: number;
-      byGender: {
-        male: number;
-        female: number;
-        malePercentage: number;
-        femalePercentage: number;
-      };
-      byPatientType: Array<{
-        patientType: string;
-        count: number;
-        percentage: number;
-      }>;
-      byPatientCondition: Array<{
-        patientCondition: string;
-        count: number;
-        percentage: number;
-      }>;
-      byDisease: Array<{
-        diseaseId: string;
-        diseaseName: string;
-        count: number;
-        percentage: number;
-      }>;
-    },
+  static async exportStatisticsToExcel(
+    statisticsData: any,
     response: Response,
     filename?: string
   ): Promise<void> {
     try {
-      const defaultFilename = `patient-statistics-${new Date().toISOString().split('T')[0]}.csv`;
+      const defaultFilename = `patient-statistics-${new Date().toISOString().split('T')[0]}.xlsx`;
       const exportFilename = filename || defaultFilename;
 
-      // Prepare statistics data
-      const statisticsData = this.prepareStatisticsData(statistics);
-      const csvData = this.convertToCSV(statisticsData);
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('สถิติข้อมูลผู้ป่วย');
+
+      // Add title
+      worksheet.mergeCells('A1:D1');
+      const titleCell = worksheet.getCell('A1');
+      titleCell.value = 'รายงานสถิติข้อมูลผู้ป่วย';
+      titleCell.font = { bold: true, size: 16 };
+      titleCell.alignment = { horizontal: 'center' };
+
+      // Add statistics sections
+      let currentRow = 3;
+
+      // Gender distribution
+      if (statisticsData.byGender) {
+        worksheet.getCell(`A${currentRow}`).value = 'การแจกแจงตามเพศ';
+        worksheet.getCell(`A${currentRow}`).font = { bold: true };
+        currentRow++;
+
+        worksheet.getCell(`A${currentRow}`).value = `ชาย: ${statisticsData.byGender.male || 0} คน`;
+        currentRow++;
+        worksheet.getCell(`A${currentRow}`).value = `หญิง: ${statisticsData.byGender.female || 0} คน`;
+        currentRow += 2;
+      }
+
+      // Disease distribution
+      if (statisticsData.byDisease && Array.isArray(statisticsData.byDisease)) {
+        worksheet.getCell(`A${currentRow}`).value = 'การแจกแจงตามโรค';
+        worksheet.getCell(`A${currentRow}`).font = { bold: true };
+        currentRow++;
+
+        statisticsData.byDisease.forEach((disease: any) => {
+          worksheet.getCell(`A${currentRow}`).value = `${disease.thaiName}: ${disease.count} ราย`;
+          currentRow++;
+        });
+      }
 
       // Set response headers
-      response.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      response.setHeader('Content-Disposition', `attachment; filename="${exportFilename}"`);
-      response.setHeader('Cache-Control', 'no-cache');
-      response.setHeader('Pragma', 'no-cache');
-
-      // Add BOM and send data
-      const bom = '\uFEFF';
-      response.write(bom + csvData);
+      response.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      response.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(exportFilename)}"`);
+      
+      await workbook.xlsx.write(response);
       response.end();
 
     } catch (error) {
-      console.error('Export statistics to CSV error:', error);
-      throw new Error('เกิดข้อผิดพลาดในการส่งออกข้อมูลสถิติ');
+      console.error('Export statistics to Excel error:', error);
+      throw new Error('เกิดข้อผิดพลาดในการส่งออกสถิติเป็น Excel');
     }
-  }
-
-  /**
-   * Prepare statistics data for export
-   * @param statistics - Statistics object
-   * @returns Formatted data for CSV
-   */
-  private static prepareStatisticsData(statistics: any): Array<Record<string, string | number | null>> {
-    const data: Array<Record<string, string | number | null>> = [];
-
-    // Summary section
-    data.push({
-      col0: 'สรุปภาพรวม',
-      col1: '',
-      col2: '',
-      col3: '',
-    });
-    data.push({
-      col0: 'จำนวนผู้ป่วยทั้งหมด',
-      col1: statistics.totalPatients,
-      col2: '',
-      col3: '',
-    });
-    data.push({
-      col0: '',
-      col1: '',
-      col2: '',
-      col3: '',
-    });
-
-    // Gender distribution
-    data.push({
-      col0: 'การแจกแจงตามเพศ',
-      col1: 'จำนวน',
-      col2: 'เปอร์เซ็นต์',
-      col3: '',
-    });
-    data.push({
-      col0: 'ชาย',
-      col1: statistics.byGender.male,
-      col2: `${statistics.byGender.malePercentage}%`,
-      col3: '',
-    });
-    data.push({
-      col0: 'หญิง',
-      col1: statistics.byGender.female,
-      col2: `${statistics.byGender.femalePercentage}%`,
-      col3: '',
-    });
-    data.push({
-      col0: '',
-      col1: '',
-      col2: '',
-      col3: '',
-    });
-
-    // Patient type distribution
-    data.push({
-      col0: 'การแจกแจงตามประเภทผู้ป่วย',
-      col1: 'จำนวน',
-      col2: 'เปอร์เซ็นต์',
-      col3: '',
-    });
-    statistics.byPatientType.forEach((item: any) => {
-      data.push({
-        col0: patientTypeMapping[item.patientType as keyof typeof patientTypeMapping] || item.patientType,
-        col1: item.count,
-        col2: `${item.percentage}%`,
-        col3: '',
-      });
-    });
-    data.push({
-      col0: '',
-      col1: '',
-      col2: '',
-      col3: '',
-    });
-
-    // Top diseases
-    data.push({
-      col0: 'โรคที่พบบ่อย (10 อันดับแรก)',
-      col1: 'จำนวน',
-      col2: 'เปอร์เซ็นต์',
-      col3: '',
-    });
-    statistics.byDisease.forEach((item: any) => {
-      data.push({
-        col0: item.diseaseName,
-        col1: item.count,
-        col2: `${item.percentage}%`,
-        col3: '',
-      });
-    });
-
-    return data;
-  }
-
-  // ============================================
-  // FORMATTING UTILITIES
-  // ============================================
-
-  /**
-   * Format date to Thai format (DD/MM/YYYY)
-   * @param date - Date object
-   * @returns Formatted date string
-   */
-  private static formatDate(date: Date): string {
-    if (!date) return '';
-    
-    const options: Intl.DateTimeFormatOptions = {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      timeZone: config.constants.timezone,
-    };
-    
-    return new Intl.DateTimeFormat('th-TH', options).format(new Date(date));
-  }
-
-  /**
-   * Format datetime to Thai format (DD/MM/YYYY HH:mm)
-   * @param date - Date object
-   * @returns Formatted datetime string
-   */
-  private static formatDateTime(date: Date): string {
-    if (!date) return '';
-    
-    const options: Intl.DateTimeFormatOptions = {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: config.constants.timezone,
-    };
-    
-    return new Intl.DateTimeFormat('th-TH', options).format(new Date(date));
-  }
-
-  // ============================================
-  // VALIDATION UTILITIES
-  // ============================================
-
-  /**
-   * Validate export parameters
-   * @param dataCount - Number of records to export
-   * @param userRole - User role ID
-   * @returns Validation result
-   */
-  static validateExportRequest(dataCount: number, userRole: number): {
-    isValid: boolean;
-    error?: string;
-  } {
-    // Check maximum export limit
-    if (dataCount > config.constants.excel.maxRows) {
-      return {
-        isValid: false,
-        error: `จำนวนข้อมูลเกินกว่าที่อนุญาต (สูงสุด ${config.constants.excel.maxRows.toLocaleString()} รายการ)`,
-      };
-    }
-
-    // Check user permissions
-    if (userRole > 3) {
-      return {
-        isValid: false,
-        error: 'ไม่มีสิทธิ์ในการส่งออกข้อมูล',
-      };
-    }
-
-    return { isValid: true };
-  }
-
-  /**
-   * Get export filename with timestamp
-   * @param prefix - Filename prefix
-   * @param extension - File extension (default: csv)
-   * @returns Generated filename
-   */
-  static generateExportFilename(prefix: string, extension: string = 'csv'): string {
-    const timestamp = new Date().toISOString().split('T')[0];
-    return `${prefix}-${timestamp}.${extension}`;
   }
 }
