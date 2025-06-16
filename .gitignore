@@ -18,3 +18,4 @@ yarn-error.log*
 
 # ไฟล์ของระบบปฏิบัติการ
 .DS_Store
+frontend/
