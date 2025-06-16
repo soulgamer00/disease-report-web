@@ -6,173 +6,208 @@ import { z } from 'zod';
 // REPORT REQUEST SCHEMAS
 // ============================================
 
-// Base Report Query Schema (common filters)
-export const baseReportQuerySchema = z.object({
-  // Date Range Filters
-  dateFrom: z
-    .string()
-    .optional()
-    .refine((date) => !date || !isNaN(Date.parse(date)), 'วันที่เริ่มต้นไม่ถูกต้อง')
-    .transform((date) => (date ? new Date(date) : undefined)),
-  dateTo: z
-    .string()
-    .optional()
-    .refine((date) => !date || !date || !isNaN(Date.parse(date)), 'วันที่สิ้นสุดไม่ถูกต้อง')
-    .transform((date) => (date ? new Date(date) : undefined)),
-  
-  // Hospital Filters
-  hospitalCode: z
-    .string()
-    .regex(/^\d{9}$/, 'รหัสโรงพยาบาลต้องเป็นตัวเลข 9 หลัก')
-    .optional(),
-  hospitalId: z
-    .string()
-    .uuid('รหัสโรงพยาบาลไม่ถูกต้อง กรุณาระบุ UUID ที่ถูกต้อง')
-    .optional(),
-  
-  // Disease Filters
-  diseaseId: z
-    .string()
-    .uuid('รหัสโรคไม่ถูกต้อง กรุณาระบุ UUID ที่ถูกต้อง')
-    .optional(),
-  
-  // Demographics Filters
-  gender: z
-    .enum(['M', 'F'])
-    .optional(),
-  ageMin: z
-    .string()
-    .optional()
-    .transform((val) => (val ? parseInt(val, 10) : undefined))
-    .pipe(z.number().min(0, 'อายุขั้นต่ำต้องมากกว่าหรือเท่ากับ 0').max(120, 'อายุขั้นต่ำต้องไม่เกิน 120').optional()),
-  ageMax: z
-    .string()
-    .optional()
-    .transform((val) => (val ? parseInt(val, 10) : undefined))
-    .pipe(z.number().min(0, 'อายุสูงสุดต้องมากกว่าหรือเท่ากับ 0').max(120, 'อายุสูงสุดต้องไม่เกิน 120').optional()),
-  
-  // Pagination
-  page: z
-    .string()
-    .optional()
-    .transform((val) => (val ? parseInt(val, 10) : 1))
-    .pipe(z.number().min(1, 'หน้าต้องมากกว่าหรือเท่ากับ 1')),
-  limit: z
-    .string()
-    .optional()
-    .transform((val) => (val ? parseInt(val, 10) : 1000))
-    .pipe(z.number().min(1, 'จำนวนรายการต่อหน้าต้องมากกว่าหรือเท่ากับ 1').max(5000, 'จำนวนรายการต่อหน้าต้องไม่เกิน 5000')),
+// Base Report Filters (common to all reports)
+export const reportFiltersSchema = z.object({
+  diseaseId: z.string().uuid('รหัสโรคต้องเป็น UUID'),
+  year: z.string().optional().default(new Date().getFullYear().toString()),
+  hospitalCode: z.string().optional().default('all'),
+  gender: z.enum(['MALE', 'FEMALE', 'all']).optional().default('all'),
+  ageGroup: z.enum(['0-10', '11-20', '21-30', '31-40', '41-50', '51+', 'all']).optional().default('all'),
+  occupation: z.string().optional().default('all'),
 });
 
-// Incidence Rate Data Query Schema
-export const incidenceDataQuerySchema = baseReportQuerySchema.extend({
-  groupBy: z
-    .enum(['month', 'quarter', 'year', 'hospital', 'disease'])
-    .optional()
-    .default('month'),
-});
+// Age Groups Report Request
+export const ageGroupsReportRequestSchema = reportFiltersSchema;
 
-// Gender Ratio Data Query Schema
-export const genderDataQuerySchema = baseReportQuerySchema.extend({
-  groupBy: z
-    .enum(['age_group', 'hospital', 'disease', 'month'])
-    .optional()
-    .default('age_group'),
-});
+// Gender Ratio Report Request
+export const genderRatioReportRequestSchema = reportFiltersSchema;
 
-// Trend Analysis Data Query Schema
-export const trendDataQuerySchema = baseReportQuerySchema.extend({
-  groupBy: z
-    .enum(['day', 'week', 'month', 'quarter', 'year'])
-    .optional()
-    .default('month'),
-  trendType: z
-    .enum(['patient_count', 'incidence_rate', 'gender_ratio'])
-    .optional()
-    .default('patient_count'),
-});
+// Incidence Rates Report Request
+export const incidenceRatesReportRequestSchema = reportFiltersSchema;
 
-// Population Data Query Schema
-export const populationDataQuerySchema = z.object({
-  year: z
-    .string()
-    .optional()
-    .transform((val) => (val ? parseInt(val, 10) : new Date().getFullYear()))
-    .pipe(z.number().min(2020, 'ปีต้องตั้งแต่ 2020').max(new Date().getFullYear() + 5, `ปีต้องไม่เกิน ${new Date().getFullYear() + 5}`)),
-  hospitalCode: z
-    .string()
-    .regex(/^\d{9}$/, 'รหัสโรงพยาบาลต้องเป็นตัวเลข 9 หลัก')
-    .optional(),
-  hospitalId: z
-    .string()
-    .uuid('รหัสโรงพยาบาลไม่ถูกต้อง กรุณาระบุ UUID ที่ถูกต้อง')
-    .optional(),
-  groupBy: z
-    .enum(['hospital', 'year', 'age_group', 'gender'])
-    .optional()
-    .default('hospital'),
-});
+// Occupation Report Request
+export const occupationReportRequestSchema = reportFiltersSchema;
 
 // ============================================
 // REPORT RESPONSE SCHEMAS
 // ============================================
 
-// Patient Visit Data Item Schema
-export const patientVisitDataItemSchema = z.object({
-  id: z.string().uuid(),
-  hospitalCode: z.string(),
-  hospitalName: z.string(),
-  diseaseId: z.string().uuid(),
-  diseaseName: z.string(),
-  patientGender: z.enum(['M', 'F']),
-  ageAtIllness: z.number(),
-  illnessDate: z.date(),
-  month: z.string(),
-  year: z.number(),
-  quarter: z.string(),
+// Disease Info Schema
+export const diseaseInfoSchema = z.object({
+  id: z.number(),
+  thaiName: z.string().nullable(),
+  engName: z.string().nullable(),
+  daName: z.string().nullable(),
 });
 
-// Population Data Item Schema
-export const populationDataItemSchema = z.object({
-  id: z.string().uuid(),
-  hospitalCode: z.string(),
-  hospitalName: z.string(),
-  year: z.number(),
-  totalPopulation: z.number(),
-});
-
-// Aggregated Count Data Schema
-export const aggregatedCountDataSchema = z.object({
-  groupKey: z.string(),
-  groupValue: z.string(),
+// Age Groups Report Response
+export const ageGroupDataSchema = z.object({
+  ageGroup: z.string(),
   count: z.number(),
-  hospitalCode: z.string().optional(),
-  hospitalName: z.string().optional(),
-  diseaseId: z.string().uuid().optional(),
-  diseaseName: z.string().optional(),
+  percentage: z.number(),
+  incidenceRate: z.number(),
 });
 
-// Report Data Response Schemas
-export const patientVisitDataResponseSchema = z.object({
+export const ageGroupsReportResponseSchema = z.object({
   success: z.boolean(),
   message: z.string(),
   data: z.object({
-    items: z.array(patientVisitDataItemSchema),
-    aggregated: z.array(aggregatedCountDataSchema).optional(),
-    total: z.number(),
-    page: z.number(),
-    limit: z.number(),
-    totalPages: z.number(),
+    disease: diseaseInfoSchema,
+    filters: reportFiltersSchema,
+    summary: z.object({
+      totalPatients: z.number(),
+      totalPopulation: z.number(),
+      hasPopulationData: z.boolean(),
+    }),
+    ageGroups: z.array(ageGroupDataSchema),
   }),
 });
 
-export const populationDataResponseSchema = z.object({
+// Gender Ratio Report Response
+export const genderRatioDataSchema = z.object({
+  total: z.number(),
+  male: z.number(),
+  female: z.number(),
+  other: z.number(),
+  notSpecified: z.number(),
+});
+
+export const genderRatioResponseSchema = z.object({
   success: z.boolean(),
   message: z.string(),
   data: z.object({
-    items: z.array(populationDataItemSchema),
+    disease: diseaseInfoSchema,
+    filters: reportFiltersSchema,
+    summary: z.object({
+      total: z.number(),
+      male: z.number(),
+      female: z.number(),
+      other: z.number(),
+      notSpecified: z.number(),
+      totalPopulation: z.number(),
+      hasPopulationData: z.boolean(),
+    }),
+    ratio: z.object({
+      male: z.number(),
+      female: z.number(),
+    }),
+    percentages: z.object({
+      male: z.number(),
+      female: z.number(),
+      other: z.number(),
+      notSpecified: z.number(),
+    }),
+  }),
+});
+
+// Incidence Rates Report Response
+export const hospitalStatsSchema = z.object({
+  hospitalCode: z.string(),
+  hospitalName: z.string(),
+  population: z.number(),
+  patients: z.number(),
+  deaths: z.number(),
+  incidenceRate: z.number(),
+  mortalityRate: z.number(),
+  caseFatalityRate: z.number(),
+  hasPopulationData: z.boolean(),
+});
+
+export const incidenceRatesResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    disease: diseaseInfoSchema,
+    filters: reportFiltersSchema,
+    summary: z.object({
+      totalPopulation: z.number(),
+      totalPatients: z.number(),
+      deaths: z.number(),
+      incidenceRate: z.number(),
+      mortalityRate: z.number(),
+      caseFatalityRate: z.number(),
+      hasPopulationData: z.boolean(),
+      populationNote: z.string().optional(),
+    }),
+    hospitals: z.array(hospitalStatsSchema),
+    populationDetails: z.object({
+      totalHospitalsWithData: z.number(),
+      yearsCovered: z.array(z.number()),
+      note: z.string(),
+    }),
+  }),
+});
+
+// Occupation Report Response
+export const occupationDataSchema = z.object({
+  occupation: z.string(),
+  count: z.number(),
+  percentage: z.number(),
+});
+
+export const occupationReportResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    disease: diseaseInfoSchema,
+    filters: reportFiltersSchema,
+    summary: z.object({
+      totalPatients: z.number(),
+      uniqueOccupations: z.number(),
+    }),
+    occupations: z.array(occupationDataSchema),
+  }),
+});
+
+// ============================================
+// UTILITY RESPONSE SCHEMAS
+// ============================================
+
+// Diseases List Response
+export const diseaseItemSchema = z.object({
+  id: z.string().uuid(),
+  engName: z.string(),
+  thaiName: z.string(),
+  shortName: z.string(),
+  details: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+  isActive: z.boolean(),
+});
+
+export const diseasesListResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    diseases: z.array(diseaseItemSchema),
     total: z.number(),
-    year: z.number(),
+  }),
+});
+
+// Hospitals List Response
+export const hospitalItemSchema = z.object({
+  value: z.string(),
+  label: z.string(),
+  code: z.string(),
+});
+
+export const hospitalsListResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    hospitals: z.array(hospitalItemSchema),
+    total: z.number(),
+  }),
+});
+
+// Public Stats Response
+export const publicStatsResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    totalDiseases: z.number(),
+    totalPatients: z.number(),
+    currentMonthPatients: z.number(),
   }),
 });
 
@@ -195,31 +230,46 @@ export const reportErrorResponseSchema = z.object({
 // ============================================
 
 // Request Types
-export type BaseReportQuery = z.infer<typeof baseReportQuerySchema>;
-export type IncidenceDataQuery = z.infer<typeof incidenceDataQuerySchema>;
-export type GenderDataQuery = z.infer<typeof genderDataQuerySchema>;
-export type TrendDataQuery = z.infer<typeof trendDataQuerySchema>;
-export type PopulationDataQuery = z.infer<typeof populationDataQuerySchema>;
+export type ReportFilters = z.infer<typeof reportFiltersSchema>;
+export type AgeGroupsReportRequest = z.infer<typeof ageGroupsReportRequestSchema>;
+export type GenderRatioReportRequest = z.infer<typeof genderRatioReportRequestSchema>;
+export type IncidenceRatesReportRequest = z.infer<typeof incidenceRatesReportRequestSchema>;
+export type OccupationReportRequest = z.infer<typeof occupationReportRequestSchema>;
+
+// Response Data Types
+export type DiseaseInfo = z.infer<typeof diseaseInfoSchema>;
+export type AgeGroupData = z.infer<typeof ageGroupDataSchema>;
+export type GenderRatioData = z.infer<typeof genderRatioDataSchema>;
+export type HospitalStats = z.infer<typeof hospitalStatsSchema>;
+export type OccupationData = z.infer<typeof occupationDataSchema>;
+export type DiseaseItem = z.infer<typeof diseaseItemSchema>;
+export type HospitalItem = z.infer<typeof hospitalItemSchema>;
 
 // Response Types
-export type PatientVisitDataItem = z.infer<typeof patientVisitDataItemSchema>;
-export type PopulationDataItem = z.infer<typeof populationDataItemSchema>;
-export type AggregatedCountData = z.infer<typeof aggregatedCountDataSchema>;
-export type PatientVisitDataResponse = z.infer<typeof patientVisitDataResponseSchema>;
-export type PopulationDataResponse = z.infer<typeof populationDataResponseSchema>;
+export type AgeGroupsReportResponse = z.infer<typeof ageGroupsReportResponseSchema>;
+export type GenderRatioResponse = z.infer<typeof genderRatioResponseSchema>;
+export type IncidenceRatesResponse = z.infer<typeof incidenceRatesResponseSchema>;
+export type OccupationReportResponse = z.infer<typeof occupationReportResponseSchema>;
+export type DiseasesListResponse = z.infer<typeof diseasesListResponseSchema>;
+export type HospitalsListResponse = z.infer<typeof hospitalsListResponseSchema>;
+export type PublicStatsResponse = z.infer<typeof publicStatsResponseSchema>;
 export type ReportErrorResponse = z.infer<typeof reportErrorResponseSchema>;
 
-// Combined Report Types for easier imports
+// Combined Types for convenience
 export type ReportRequestTypes = {
-  base: BaseReportQuery;
-  incidence: IncidenceDataQuery;
-  gender: GenderDataQuery;
-  trend: TrendDataQuery;
-  population: PopulationDataQuery;
+  ageGroups: AgeGroupsReportRequest;
+  genderRatio: GenderRatioReportRequest;
+  incidenceRates: IncidenceRatesReportRequest;
+  occupation: OccupationReportRequest;
 };
 
 export type ReportResponseTypes = {
-  patientVisitData: PatientVisitDataResponse;
-  populationData: PopulationDataResponse;
+  ageGroups: AgeGroupsReportResponse;
+  genderRatio: GenderRatioResponse;
+  incidenceRates: IncidenceRatesResponse;
+  occupation: OccupationReportResponse;
+  diseases: DiseasesListResponse;
+  hospitals: HospitalsListResponse;
+  publicStats: PublicStatsResponse;
   error: ReportErrorResponse;
 };

@@ -3,16 +3,12 @@
 import { Request, Response } from 'express';
 import { ReportService } from '../services/report.service';
 import {
-  baseReportQuerySchema,
-  incidenceDataQuerySchema,
-  genderDataQuerySchema,
-  trendDataQuerySchema,
-  populationDataQuerySchema,
-  BaseReportQuery,
-  IncidenceDataQuery,
-  GenderDataQuery,
-  TrendDataQuery,
-  PopulationDataQuery,
+  reportFiltersSchema,
+  ageGroupsReportRequestSchema,
+  genderRatioReportRequestSchema,
+  incidenceRatesReportRequestSchema,
+  occupationReportRequestSchema,
+  ReportFilters,
 } from '../schemas/report.schema';
 
 // ============================================
@@ -32,11 +28,13 @@ export class ReportController {
         message: 'Report service is running',
         timestamp: new Date().toISOString(),
         endpoints: [
-          'GET /api/reports/patient-visit-data - Get patient visit data for reports',
-          'GET /api/reports/incidence-data - Get incidence rate data',
-          'GET /api/reports/gender-data - Get gender ratio data',
-          'GET /api/reports/trend-data - Get trend analysis data',
-          'GET /api/reports/population-data - Get population data',
+          'GET /api/reports/age-groups - Get age groups report',
+          'GET /api/reports/gender-ratio - Get gender ratio report',
+          'GET /api/reports/incidence-rates - Get incidence rates report',
+          'GET /api/reports/occupation - Get occupation report',
+          'GET /api/reports/diseases - Get diseases list',
+          'GET /api/reports/hospitals - Get hospitals list',
+          'GET /api/reports/public-stats - Get public statistics',
         ],
       });
     } catch (error) {
@@ -50,176 +48,125 @@ export class ReportController {
   }
 
   // ============================================
-  // PATIENT VISIT DATA FOR REPORTS
+  // AGE GROUPS REPORT
   // ============================================
 
-  static async getPatientVisitData(req: Request, res: Response): Promise<void> {
+  static async getAgeGroupsReport(req: Request, res: Response): Promise<void> {
     try {
       // Validate query parameters
-      const queryParams: BaseReportQuery = baseReportQuerySchema.parse(req.query);
-
-      // Validate date range
-      if (queryParams.dateFrom && queryParams.dateTo) {
-        await ReportService.validateDateRange(queryParams.dateFrom, queryParams.dateTo);
-      }
+      const filters: ReportFilters = ageGroupsReportRequestSchema.parse(req.query);
 
       // Call service
-      const result = await ReportService.getPatientVisitData(queryParams);
+      const result = await ReportService.getAgeGroupsReport(filters);
 
       // Return success response
       res.status(200).json({
         success: true,
-        message: 'ดึงข้อมูลผู้ป่วยสำหรับรายงานสำเร็จ',
+        message: 'ดึงข้อมูลรายงานกลุ่มอายุสำเร็จ',
         data: result,
       });
     } catch (error) {
-      console.error('Get patient visit data error:', error);
+      console.error('Get age groups report error:', error);
       
-      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลผู้ป่วย';
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลรายงานกลุ่มอายุ';
       
       res.status(400).json({
         success: false,
         message: errorMessage,
-        error: 'Get patient visit data failed',
+        error: 'Get age groups report failed',
       });
     }
   }
 
   // ============================================
-  // INCIDENCE RATE DATA
+  // GENDER RATIO REPORT
   // ============================================
 
-  static async getIncidenceData(req: Request, res: Response): Promise<void> {
+  static async getGenderRatioReport(req: Request, res: Response): Promise<void> {
     try {
       // Validate query parameters
-      const queryParams: IncidenceDataQuery = incidenceDataQuerySchema.parse(req.query);
-
-      // Validate date range
-      if (queryParams.dateFrom && queryParams.dateTo) {
-        await ReportService.validateDateRange(queryParams.dateFrom, queryParams.dateTo);
-      }
+      const filters: ReportFilters = genderRatioReportRequestSchema.parse(req.query);
 
       // Call service
-      const result = await ReportService.getIncidenceData(queryParams);
+      const result = await ReportService.getGenderRatioReport(filters);
 
       // Return success response
       res.status(200).json({
         success: true,
-        message: 'ดึงข้อมูลอัตราป่วยสำเร็จ',
+        message: 'ดึงข้อมูลรายงานอัตราส่วนเพศสำเร็จ',
         data: result,
       });
     } catch (error) {
-      console.error('Get incidence data error:', error);
+      console.error('Get gender ratio report error:', error);
       
-      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลอัตราป่วย';
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลรายงานอัตราส่วนเพศ';
       
       res.status(400).json({
         success: false,
         message: errorMessage,
-        error: 'Get incidence data failed',
+        error: 'Get gender ratio report failed',
       });
     }
   }
 
   // ============================================
-  // GENDER RATIO DATA
+  // INCIDENCE RATES REPORT
   // ============================================
 
-  static async getGenderData(req: Request, res: Response): Promise<void> {
+  static async getIncidenceRatesReport(req: Request, res: Response): Promise<void> {
     try {
       // Validate query parameters
-      const queryParams: GenderDataQuery = genderDataQuerySchema.parse(req.query);
-
-      // Validate date range
-      if (queryParams.dateFrom && queryParams.dateTo) {
-        await ReportService.validateDateRange(queryParams.dateFrom, queryParams.dateTo);
-      }
+      const filters: ReportFilters = incidenceRatesReportRequestSchema.parse(req.query);
 
       // Call service
-      const result = await ReportService.getGenderData(queryParams);
+      const result = await ReportService.getIncidenceRatesReport(filters);
 
       // Return success response
       res.status(200).json({
         success: true,
-        message: 'ดึงข้อมูลอัตราส่วนเพศสำเร็จ',
+        message: 'ดึงข้อมูลรายงานอัตราป่วยสำเร็จ',
         data: result,
       });
     } catch (error) {
-      console.error('Get gender data error:', error);
+      console.error('Get incidence rates report error:', error);
       
-      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลอัตราส่วนเพศ';
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลรายงานอัตราป่วย';
       
       res.status(400).json({
         success: false,
         message: errorMessage,
-        error: 'Get gender data failed',
+        error: 'Get incidence rates report failed',
       });
     }
   }
 
   // ============================================
-  // TREND ANALYSIS DATA
+  // OCCUPATION REPORT
   // ============================================
 
-  static async getTrendData(req: Request, res: Response): Promise<void> {
+  static async getOccupationReport(req: Request, res: Response): Promise<void> {
     try {
       // Validate query parameters
-      const queryParams: TrendDataQuery = trendDataQuerySchema.parse(req.query);
-
-      // Validate date range
-      if (queryParams.dateFrom && queryParams.dateTo) {
-        await ReportService.validateDateRange(queryParams.dateFrom, queryParams.dateTo);
-      }
+      const filters: ReportFilters = occupationReportRequestSchema.parse(req.query);
 
       // Call service
-      const result = await ReportService.getTrendData(queryParams);
+      const result = await ReportService.getOccupationReport(filters);
 
       // Return success response
       res.status(200).json({
         success: true,
-        message: 'ดึงข้อมูลแนวโน้มสำเร็จ',
+        message: 'ดึงข้อมูลรายงานอาชีพสำเร็จ',
         data: result,
       });
     } catch (error) {
-      console.error('Get trend data error:', error);
+      console.error('Get occupation report error:', error);
       
-      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลแนวโน้ม';
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลรายงานอาชีพ';
       
       res.status(400).json({
         success: false,
         message: errorMessage,
-        error: 'Get trend data failed',
-      });
-    }
-  }
-
-  // ============================================
-  // POPULATION DATA
-  // ============================================
-
-  static async getPopulationData(req: Request, res: Response): Promise<void> {
-    try {
-      // Validate query parameters
-      const queryParams: PopulationDataQuery = populationDataQuerySchema.parse(req.query);
-
-      // Call service
-      const result = await ReportService.getPopulationData(queryParams);
-
-      // Return success response
-      res.status(200).json({
-        success: true,
-        message: 'ดึงข้อมูลประชากรสำเร็จ',
-        data: result,
-      });
-    } catch (error) {
-      console.error('Get population data error:', error);
-      
-      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลประชากร';
-      
-      res.status(400).json({
-        success: false,
-        message: errorMessage,
-        error: 'Get population data failed',
+        error: 'Get occupation report failed',
       });
     }
   }
@@ -228,48 +175,83 @@ export class ReportController {
   // UTILITY ENDPOINTS
   // ============================================
 
-  static async getAvailableFilters(req: Request, res: Response): Promise<void> {
+  /**
+   * Get all diseases for dropdown
+   */
+  static async getDiseases(req: Request, res: Response): Promise<void> {
     try {
-      // Get available filter options (can be cached)
-      const filterOptions = {
-        dateRange: {
-          minDate: '2020-01-01',
-          maxDate: new Date().toISOString().split('T')[0],
-        },
-        groupByOptions: {
-          incidence: ['month', 'quarter', 'year', 'hospital', 'disease'],
-          gender: ['age_group', 'hospital', 'disease', 'month'],
-          trend: ['day', 'week', 'month', 'quarter', 'year'],
-          population: ['hospital', 'year', 'age_group', 'gender'],
-        },
-        ageGroups: [
-          { label: '0-4 ปี', value: '0-4' },
-          { label: '5-14 ปี', value: '5-14' },
-          { label: '15-24 ปี', value: '15-24' },
-          { label: '25-34 ปี', value: '25-34' },
-          { label: '35-44 ปี', value: '35-44' },
-          { label: '45-54 ปี', value: '45-54' },
-          { label: '55-64 ปี', value: '55-64' },
-          { label: '65+ ปี', value: '65+' },
-        ],
-        genderOptions: [
-          { label: 'ชาย', value: 'M' },
-          { label: 'หญิง', value: 'F' },
-        ],
-      };
+      const diseases = await ReportService.getAllDiseases();
 
       res.status(200).json({
         success: true,
-        message: 'ดึงตัวเลือกการกรองข้อมูลสำเร็จ',
-        data: filterOptions,
+        message: 'ดึงข้อมูลรายการโรคสำเร็จ',
+        data: {
+          diseases,
+          total: diseases.length,
+        },
       });
     } catch (error) {
-      console.error('Get filter options error:', error);
+      console.error('Get diseases error:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลรายการโรค';
       
       res.status(500).json({
         success: false,
-        message: 'เกิดข้อผิดพลาดในการดึงตุตัวเลือกการกรองข้อมูล',
-        error: 'Get filter options failed',
+        message: errorMessage,
+        error: 'Get diseases failed',
+      });
+    }
+  }
+
+  /**
+   * Get all hospitals for dropdown
+   */
+  static async getHospitals(req: Request, res: Response): Promise<void> {
+    try {
+      const hospitals = await ReportService.getHospitals();
+
+      res.status(200).json({
+        success: true,
+        message: 'ดึงข้อมูลรายการโรงพยาบาลสำเร็จ',
+        data: {
+          hospitals,
+          total: hospitals.length,
+        },
+      });
+    } catch (error) {
+      console.error('Get hospitals error:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลรายการโรงพยาบาล';
+      
+      res.status(500).json({
+        success: false,
+        message: errorMessage,
+        error: 'Get hospitals failed',
+      });
+    }
+  }
+
+  /**
+   * Get public statistics
+   */
+  static async getPublicStats(req: Request, res: Response): Promise<void> {
+    try {
+      const stats = await ReportService.getPublicStats();
+
+      res.status(200).json({
+        success: true,
+        message: 'ดึงข้อมูลสถิติทั่วไปสำเร็จ',
+        data: stats,
+      });
+    } catch (error) {
+      console.error('Get public stats error:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลสถิติทั่วไป';
+      
+      res.status(500).json({
+        success: false,
+        message: errorMessage,
+        error: 'Get public stats failed',
       });
     }
   }

@@ -1,16 +1,15 @@
 // backend/src/services/report.service.ts
 
-import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { ReportUtils } from '../utils/report.utils';
 import {
-  BaseReportQuery,
-  IncidenceDataQuery,
-  GenderDataQuery,
-  TrendDataQuery,
-  PopulationDataQuery,
-  PatientVisitDataItem,
-  PopulationDataItem,
-  AggregatedCountData,
+  ReportFilters,
+  DiseaseInfo,
+  AgeGroupData,
+  HospitalStats,
+  OccupationData,
+  DiseaseItem,
+  HospitalItem,
 } from '../schemas/report.schema';
 
 // ============================================
@@ -20,481 +19,418 @@ import {
 export class ReportService {
 
   // ============================================
-  // PATIENT VISIT DATA FOR REPORTS
+  // DISEASE & HOSPITAL UTILITIES
   // ============================================
 
-  static async getPatientVisitData(queryParams: BaseReportQuery): Promise<{
-    items: PatientVisitDataItem[];
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  }> {
+  /**
+   * Get disease information by ID
+   */
+  static async getDiseaseInfo(diseaseId: string): Promise<DiseaseInfo | null> {
     try {
-      const { 
-        dateFrom, 
-        dateTo, 
-        hospitalCode, 
-        hospitalId, 
-        diseaseId, 
-        gender, 
-        ageMin, 
-        ageMax, 
-        page = 1, 
-        limit = 1000 
-      } = queryParams;
+      const disease = await prisma.disease.findUnique({
+        where: { 
+          id: diseaseId,
+          isActive: true 
+        },
+        select: {
+          id: true,
+          thaiName: true,
+          engName: true,
+          shortName: true
+        }
+      });
+      
+      return disease ? {
+        id: parseInt(disease.id), // Convert to number for consistency with competitor example
+        thaiName: disease.thaiName,
+        engName: disease.engName,
+        daName: disease.shortName // Using shortName as daName equivalent
+      } : null;
 
-      // Build where conditions
-      const whereConditions: Prisma.PatientVisitWhereInput = {
+    } catch (error) {
+      console.error('Error fetching disease info:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get all active diseases for dropdown
+   */
+  static async getAllDiseases(): Promise<DiseaseItem[]> {
+    return await prisma.disease.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        engName: true,
+        thaiName: true,
+        shortName: true,
+        details: true,
+        createdAt: true,
+        updatedAt: true,
+        isActive: true
+      },
+      orderBy: { thaiName: 'asc' }
+    });
+  }
+
+  /**
+   * Get hospitals list for dropdown
+   */
+  static async getHospitals(): Promise<HospitalItem[]> {
+    const hospitals = await prisma.hospital.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        hospitalName: true,
+        hospitalCode9eDigit: true
+      },
+      orderBy: { hospitalName: 'asc' }
+    });
+    
+    return hospitals.map(ReportUtils.formatHospitalForDropdown);
+  }
+
+  /**
+   * Get population data for incidence rate calculation
+   */
+  static async getPopulationData(filters: ReportFilters) {
+    try {
+      const where = ReportUtils.buildPopulationWhereConditions(filters);
+
+      const populations = await prisma.population.findMany({
+        where,
+        include: {
+          hospital: {
+            select: {
+              hospitalName: true,
+              hospitalCode9eDigit: true
+            }
+          }
+        }
+      });
+
+      const totalPopulation = populations.reduce((sum, pop) => sum + pop.count, 0);
+      
+      return { totalPopulation, populations };
+    } catch (error) {
+      console.error('Error fetching population data:', error);
+      return { totalPopulation: 0, populations: [] };
+    }
+  }
+
+  /**
+   * Get public statistics
+   */
+  static async getPublicStats() {
+    const totalDiseases = await prisma.disease.count({
+      where: { isActive: true }
+    });
+    
+    const totalPatients = await prisma.patientVisit.count({
+      where: { isActive: true }
+    });
+    
+    const { start: startOfMonth, end: endOfMonth } = ReportUtils.getCurrentMonthRange();
+    
+    const currentMonthPatients = await prisma.patientVisit.count({
+      where: {
         isActive: true,
-      };
-
-      // Date range filter
-      if (dateFrom || dateTo) {
-        whereConditions.illnessDate = {};
-        if (dateFrom) whereConditions.illnessDate.gte = dateFrom;
-        if (dateTo) whereConditions.illnessDate.lte = dateTo;
+        illnessDate: {
+          gte: startOfMonth,
+          lte: endOfMonth
+        }
       }
+    });
+    
+    return {
+      totalDiseases,
+      totalPatients,
+      currentMonthPatients
+    };
+  }
 
-      // Hospital filters
-      if (hospitalCode) {
-        whereConditions.hospitalCode9eDigit = hospitalCode;
+  // ============================================
+  // AGE GROUPS REPORT
+  // ============================================
+
+  /**
+   * Generate age groups report
+   */
+  static async getAgeGroupsReport(filters: ReportFilters) {
+    // Get disease info
+    const disease = await this.getDiseaseInfo(filters.diseaseId);
+    if (!disease) {
+      throw new Error('ไม่พบข้อมูลโรคที่ระบุ');
+    }
+
+    // Build where conditions
+    const where = ReportUtils.buildWhereConditions(filters);
+
+    // Get patient data
+    const patients = await prisma.patientVisit.findMany({
+      where,
+      select: {
+        ageAtIllness: true,
+        birthday: true,
+        illnessDate: true
       }
-      if (hospitalId) {
-        whereConditions.hospital = { id: hospitalId };
+    });
+
+    // Calculate age groups
+    const ageGroupCounts: Record<string, number> = {};
+    const ageOrder = ReportUtils.getAgeGroupOrder();
+
+    // Initialize all age groups to 0
+    ageOrder.forEach(group => {
+      ageGroupCounts[group] = 0;
+    });
+
+    // Count patients in each age group
+    patients.forEach(patient => {
+      let age = patient.ageAtIllness || 0;
+      
+      // If age_at_illness is not available, calculate from birthday and illness_date
+      if (!age && patient.birthday && patient.illnessDate) {
+        age = ReportUtils.calculateAge(patient.birthday, patient.illnessDate);
       }
+      
+      const ageGroup = ReportUtils.getAgeGroup(age);
+      ageGroupCounts[ageGroup] = (ageGroupCounts[ageGroup] || 0) + 1;
+    });
 
-      // Disease filter
-      if (diseaseId) {
-        whereConditions.diseaseId = diseaseId;
+    // Get population data for incidence rate calculation
+    const { totalPopulation } = await this.getPopulationData(filters);
+
+    // Calculate total patients
+    const totalPatients = patients.length;
+
+    // Format response
+    const ageGroups: AgeGroupData[] = ageOrder.map(group => ({
+      ageGroup: group,
+      count: ageGroupCounts[group] || 0,
+      percentage: ReportUtils.calculatePercentage(ageGroupCounts[group] || 0, totalPatients),
+      incidenceRate: ReportUtils.calculateIncidenceRate(ageGroupCounts[group] || 0, totalPopulation)
+    })).filter(group => group.count > 0); // Only include groups with patients
+
+    return {
+      disease,
+      filters,
+      summary: {
+        totalPatients,
+        totalPopulation,
+        hasPopulationData: totalPopulation > 0
+      },
+      ageGroups
+    };
+  }
+
+  // ============================================
+  // GENDER RATIO REPORT
+  // ============================================
+
+  /**
+   * Generate gender ratio report
+   */
+  static async getGenderRatioReport(filters: ReportFilters) {
+    const disease = await this.getDiseaseInfo(filters.diseaseId);
+    if (!disease) {
+      throw new Error('ไม่พบข้อมูลโรคที่ระบุ');
+    }
+
+    // Build where conditions (exclude gender from filter for analysis)
+    const where = ReportUtils.buildWhereConditions({ ...filters, gender: 'all' });
+
+    // Get gender distribution
+    const genderCounts = await prisma.patientVisit.groupBy({
+      by: ['gender'],
+      where,
+      _count: {
+        gender: true
       }
+    });
 
-      // Gender filter
-      if (gender) {
-        whereConditions.gender = gender === 'M' ? 'MALE' : 'FEMALE';
+    // Process gender data
+    const { genderData, ratio, percentages } = ReportUtils.processGenderData(genderCounts);
+
+    // Get population data
+    const { totalPopulation } = await this.getPopulationData(filters);
+
+    return {
+      disease,
+      filters,
+      summary: {
+        total: genderData.total,
+        male: genderData.male,
+        female: genderData.female,
+        other: genderData.other,
+        notSpecified: genderData.notSpecified,
+        totalPopulation,
+        hasPopulationData: totalPopulation > 0
+      },
+      ratio,
+      percentages
+    };
+  }
+
+  // ============================================
+  // INCIDENCE RATES REPORT
+  // ============================================
+
+  /**
+   * Generate incidence rates report
+   */
+  static async getIncidenceRatesReport(filters: ReportFilters) {
+    const disease = await this.getDiseaseInfo(filters.diseaseId);
+    if (!disease) {
+      throw new Error('ไม่พบข้อมูลโรคที่ระบุ');
+    }
+
+    const where = ReportUtils.buildWhereConditions(filters);
+
+    // Get total patients
+    const totalPatients = await prisma.patientVisit.count({ where });
+
+    // Get deaths (patients who died)
+    const deaths = await prisma.patientVisit.count({
+      where: {
+        ...where,
+        OR: ReportUtils.getDeathConditions()
       }
+    });
 
-      // Age range filter
-      if (ageMin !== undefined || ageMax !== undefined) {
-        whereConditions.ageAtIllness = {};
-        if (ageMin !== undefined) whereConditions.ageAtIllness.gte = ageMin;
-        if (ageMax !== undefined) whereConditions.ageAtIllness.lte = ageMax;
+    // Get population data
+    const { totalPopulation, populations } = await this.getPopulationData(filters);
+
+    // Calculate overall rates
+    const incidenceRate = ReportUtils.calculateIncidenceRate(totalPatients, totalPopulation);
+    const mortalityRate = ReportUtils.calculateIncidenceRate(deaths, totalPopulation);
+    const caseFatalityRate = ReportUtils.calculateCaseFatalityRate(deaths, totalPatients);
+
+    // Get hospitals data for detailed breakdown
+    const hospitals = await prisma.hospital.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        hospitalName: true,
+        hospitalCode9eDigit: true
       }
-
-      // Execute queries
-      const [patientVisits, totalCount] = await Promise.all([
-        prisma.patientVisit.findMany({
-          where: whereConditions,
-          select: {
-            id: true,
-            hospitalCode9eDigit: true,
-            diseaseId: true,
-            gender: true,
-            ageAtIllness: true,
-            illnessDate: true,
-            hospital: {
-              select: {
-                hospitalName: true,
-              },
-            },
-            disease: {
-              select: {
-                thaiName: true,
-              },
-            },
-          },
-          orderBy: { illnessDate: 'desc' },
-          skip: (page - 1) * limit,
-          take: limit,
-        }),
-        prisma.patientVisit.count({ where: whereConditions }),
-      ]);
-
-      // Transform data
-      const items: PatientVisitDataItem[] = patientVisits.map(visit => {
-        const illnessDate = new Date(visit.illnessDate);
-        return {
-          id: visit.id,
-          hospitalCode: visit.hospitalCode9eDigit,
-          hospitalName: visit.hospital.hospitalName,
-          diseaseId: visit.diseaseId,
-          diseaseName: visit.disease.thaiName,
-          patientGender: visit.gender === 'MALE' ? 'M' : 'F',
-          ageAtIllness: visit.ageAtIllness,
-          illnessDate: illnessDate,
-          month: `${illnessDate.getFullYear()}-${String(illnessDate.getMonth() + 1).padStart(2, '0')}`,
-          year: illnessDate.getFullYear(),
-          quarter: `Q${Math.floor(illnessDate.getMonth() / 3) + 1}-${illnessDate.getFullYear()}`,
+    });
+    
+    // Calculate rates by hospital
+    const hospitalStats: HospitalStats[] = await Promise.all(
+      hospitals.map(async (hospital) => {
+        const hospitalCode = hospital.hospitalCode9eDigit;
+        const hospitalWhere = {
+          ...where,
+          hospitalCode9eDigit: hospitalCode
         };
-      });
 
-      const totalPages = Math.ceil(totalCount / limit);
-
-      return {
-        items,
-        total: totalCount,
-        page,
-        limit,
-        totalPages,
-      };
-    } catch (error) {
-      console.error('Get patient visit data service error:', error);
-      throw new Error('เกิดข้อผิดพลาดในการดึงข้อมูลผู้ป่วยสำหรับรายงาน');
-    }
-  }
-
-  // ============================================
-  // INCIDENCE RATE DATA
-  // ============================================
-
-  static async getIncidenceData(queryParams: IncidenceDataQuery): Promise<{
-    items: PatientVisitDataItem[];
-    aggregated: AggregatedCountData[];
-    total: number;
-  }> {
-    try {
-      const { groupBy = 'month', ...baseQuery } = queryParams;
-
-      // Get base patient visit data
-      const baseData = await this.getPatientVisitData(baseQuery);
-
-      // Group data for aggregation
-      let groupByField: string;
-      switch (groupBy) {
-        case 'month':
-          groupByField = 'month';
-          break;
-        case 'quarter':
-          groupByField = 'quarter';
-          break;
-        case 'year':
-          groupByField = 'year';
-          break;
-        case 'hospital':
-          groupByField = 'hospitalCode';
-          break;
-        case 'disease':
-          groupByField = 'diseaseId';
-          break;
-        default:
-          groupByField = 'month';
-      }
-
-      // Aggregate data
-      const aggregatedMap = new Map<string, {
-        count: number;
-        hospitalCode?: string;
-        hospitalName?: string;
-        diseaseId?: string;
-        diseaseName?: string;
-      }>();
-
-      baseData.items.forEach(item => {
-        const key = groupByField === 'month' ? item.month :
-                   groupByField === 'quarter' ? item.quarter :
-                   groupByField === 'year' ? item.year.toString() :
-                   groupByField === 'hospital' ? item.hospitalCode :
-                   groupByField === 'disease' ? item.diseaseId :
-                   item.month;
-
-        if (!aggregatedMap.has(key)) {
-          aggregatedMap.set(key, {
-            count: 0,
-            hospitalCode: groupByField === 'hospital' ? item.hospitalCode : undefined,
-            hospitalName: groupByField === 'hospital' ? item.hospitalName : undefined,
-            diseaseId: groupByField === 'disease' ? item.diseaseId : undefined,
-            diseaseName: groupByField === 'disease' ? item.diseaseName : undefined,
-          });
-        }
-        
-        const group = aggregatedMap.get(key)!;
-        group.count++;
-      });
-
-      // Convert to array
-      const aggregated: AggregatedCountData[] = Array.from(aggregatedMap.entries()).map(
-        ([key, data]) => ({
-          groupKey: groupByField,
-          groupValue: key,
-          count: data.count,
-          hospitalCode: data.hospitalCode,
-          hospitalName: data.hospitalName,
-          diseaseId: data.diseaseId,
-          diseaseName: data.diseaseName,
-        })
-      );
-
-      return {
-        items: baseData.items,
-        aggregated,
-        total: baseData.total,
-      };
-    } catch (error) {
-      console.error('Get incidence data service error:', error);
-      throw new Error('เกิดข้อผิดพลาดในการดึงข้อมูลอัตราป่วย');
-    }
-  }
-
-  // ============================================
-  // GENDER RATIO DATA
-  // ============================================
-
-  static async getGenderData(queryParams: GenderDataQuery): Promise<{
-    items: PatientVisitDataItem[];
-    aggregated: AggregatedCountData[];
-    total: number;
-  }> {
-    try {
-      const { groupBy = 'age_group', ...baseQuery } = queryParams;
-
-      // Get base patient visit data
-      const baseData = await this.getPatientVisitData(baseQuery);
-
-      // Group data by age groups and gender
-      const aggregatedMap = new Map<string, {
-        maleCount: number;
-        femaleCount: number;
-        hospitalCode?: string;
-        hospitalName?: string;
-        diseaseId?: string;
-        diseaseName?: string;
-      }>();
-
-      baseData.items.forEach(item => {
-        let key: string;
-        
-        if (groupBy === 'age_group') {
-          // Age grouping logic
-          const age = item.ageAtIllness;
-          if (age < 5) key = '0-4';
-          else if (age < 15) key = '5-14';
-          else if (age < 25) key = '15-24';
-          else if (age < 35) key = '25-34';
-          else if (age < 45) key = '35-44';
-          else if (age < 55) key = '45-54';
-          else if (age < 65) key = '55-64';
-          else key = '65+';
-        } else if (groupBy === 'hospital') {
-          key = item.hospitalCode;
-        } else if (groupBy === 'disease') {
-          key = item.diseaseId;
-        } else if (groupBy === 'month') {
-          key = item.month;
-        } else {
-          key = '0-4'; // Default age group
-        }
-
-        if (!aggregatedMap.has(key)) {
-          aggregatedMap.set(key, {
-            maleCount: 0,
-            femaleCount: 0,
-            hospitalCode: groupBy === 'hospital' ? item.hospitalCode : undefined,
-            hospitalName: groupBy === 'hospital' ? item.hospitalName : undefined,
-            diseaseId: groupBy === 'disease' ? item.diseaseId : undefined,
-            diseaseName: groupBy === 'disease' ? item.diseaseName : undefined,
-          });
-        }
-        
-        const group = aggregatedMap.get(key)!;
-        if (item.patientGender === 'M') {
-          group.maleCount++;
-        } else if (item.patientGender === 'F') {
-          group.femaleCount++;
-        }
-      });
-
-      // Convert to array with separate male/female entries
-      const aggregated: AggregatedCountData[] = [];
-      aggregatedMap.forEach((data, key) => {
-        // Male entry
-        aggregated.push({
-          groupKey: `${groupBy}_male`,
-          groupValue: key,
-          count: data.maleCount,
-          hospitalCode: data.hospitalCode,
-          hospitalName: data.hospitalName,
-          diseaseId: data.diseaseId,
-          diseaseName: data.diseaseName,
+        const hospitalPatients = await prisma.patientVisit.count({ where: hospitalWhere });
+        const hospitalDeaths = await prisma.patientVisit.count({
+          where: {
+            ...hospitalWhere,
+            OR: ReportUtils.getDeathConditions()
+          }
         });
-        
-        // Female entry
-        aggregated.push({
-          groupKey: `${groupBy}_female`,
-          groupValue: key,
-          count: data.femaleCount,
-          hospitalCode: data.hospitalCode,
-          hospitalName: data.hospitalName,
-          diseaseId: data.diseaseId,
-          diseaseName: data.diseaseName,
-        });
-      });
 
-      return {
-        items: baseData.items,
-        aggregated,
-        total: baseData.total,
-      };
-    } catch (error) {
-      console.error('Get gender data service error:', error);
-      throw new Error('เกิดข้อผิดพลาดในการดึงข้อมูลอัตราส่วนเพศ');
-    }
+        // Find population for this hospital
+        const hospitalPopulation = populations
+          .filter(pop => pop.hospitalCode9eDigit === hospitalCode)
+          .reduce((sum, pop) => sum + pop.count, 0);
+
+        const hospitalIncidenceRate = ReportUtils.calculateIncidenceRate(hospitalPatients, hospitalPopulation);
+        const hospitalMortalityRate = ReportUtils.calculateIncidenceRate(hospitalDeaths, hospitalPopulation);
+        const hospitalCaseFatalityRate = ReportUtils.calculateCaseFatalityRate(hospitalDeaths, hospitalPatients);
+
+        return {
+          hospitalCode: hospitalCode || '',
+          hospitalName: hospital.hospitalName,
+          population: hospitalPopulation,
+          patients: hospitalPatients,
+          deaths: hospitalDeaths,
+          incidenceRate: hospitalIncidenceRate,
+          mortalityRate: hospitalMortalityRate,
+          caseFatalityRate: hospitalCaseFatalityRate,
+          hasPopulationData: hospitalPopulation > 0
+        };
+      })
+    );
+
+    // Filter out hospitals with no patients and sort by patients count
+    const activeHospitalStats = hospitalStats
+      .filter(stat => stat.patients > 0)
+      .sort((a, b) => b.patients - a.patients);
+
+    return {
+      disease,
+      filters,
+      summary: {
+        totalPopulation,
+        totalPatients,
+        deaths,
+        incidenceRate,
+        mortalityRate,
+        caseFatalityRate,
+        hasPopulationData: totalPopulation > 0,
+        populationNote: totalPopulation === 0 ? 'ไม่มีข้อมูลประชากรสำหรับการคำนวณอัตราป่วย' : undefined
+      },
+      hospitals: activeHospitalStats,
+      populationDetails: {
+        totalHospitalsWithData: populations.length,
+        yearsCovered: [...new Set(populations.map(p => p.year))].sort(),
+        note: 'อัตราป่วยคำนวณจากจำนวนผู้ป่วยต่อประชากร 100,000 คน'
+      }
+    };
   }
 
   // ============================================
-  // TREND ANALYSIS DATA
+  // OCCUPATION REPORT
   // ============================================
 
-  static async getTrendData(queryParams: TrendDataQuery): Promise<{
-    items: PatientVisitDataItem[];
-    aggregated: AggregatedCountData[];
-    total: number;
-  }> {
-    try {
-      const { groupBy = 'month', trendType = 'patient_count', ...baseQuery } = queryParams;
+  /**
+   * Generate occupation report
+   */
+  static async getOccupationReport(filters: ReportFilters) {
+    const disease = await this.getDiseaseInfo(filters.diseaseId);
+    if (!disease) {
+      throw new Error('ไม่พบข้อมูลโรคที่ระบุ');
+    }
 
-      // Get base patient visit data
-      const baseData = await this.getPatientVisitData(baseQuery);
+    // Build where conditions (exclude occupation from filter for analysis)
+    const where = ReportUtils.buildWhereConditions({ ...filters, occupation: 'all' });
 
-      // Group data for trend analysis
-      const aggregatedMap = new Map<string, number>();
-
-      baseData.items.forEach(item => {
-        const illnessDate = new Date(item.illnessDate);
-        let key: string;
-
-        switch (groupBy) {
-          case 'day':
-            key = illnessDate.toISOString().split('T')[0];
-            break;
-          case 'week':
-            const weekStart = new Date(illnessDate);
-            weekStart.setDate(illnessDate.getDate() - illnessDate.getDay());
-            key = weekStart.toISOString().split('T')[0];
-            break;
-          case 'month':
-            key = item.month;
-            break;
-          case 'quarter':
-            key = item.quarter;
-            break;
-          case 'year':
-            key = item.year.toString();
-            break;
-          default:
-            key = item.month;
+    // Get occupation distribution
+    const occupationCounts = await prisma.patientVisit.groupBy({
+      by: ['occupation'],
+      where,
+      _count: {
+        occupation: true
+      },
+      orderBy: {
+        _count: {
+          occupation: 'desc'
         }
-
-        aggregatedMap.set(key, (aggregatedMap.get(key) || 0) + 1);
-      });
-
-      // Convert to array and sort by date
-      const aggregated: AggregatedCountData[] = Array.from(aggregatedMap.entries())
-        .map(([key, count]) => ({
-          groupKey: groupBy,
-          groupValue: key,
-          count,
-        }))
-        .sort((a, b) => a.groupValue.localeCompare(b.groupValue));
-
-      return {
-        items: baseData.items,
-        aggregated,
-        total: baseData.total,
-      };
-    } catch (error) {
-      console.error('Get trend data service error:', error);
-      throw new Error('เกิดข้อผิดพลาดในการดึงข้อมูลแนวโน้ม');
-    }
-  }
-
-  // ============================================
-  // POPULATION DATA
-  // ============================================
-
-  static async getPopulationData(queryParams: PopulationDataQuery): Promise<{
-    items: PopulationDataItem[];
-    total: number;
-    year: number;
-  }> {
-    try {
-      const { year, hospitalCode, hospitalId, groupBy = 'hospital' } = queryParams;
-
-      // Build where conditions
-      const whereConditions: Prisma.PopulationWhereInput = {
-        isActive: true,
-        year,
-      };
-
-      // Hospital filters
-      if (hospitalCode) {
-        whereConditions.hospitalCode9eDigit = hospitalCode;
       }
-      if (hospitalId) {
-        whereConditions.hospital = { id: hospitalId };
-      }
+    });
 
-      // Execute query
-      const [populations, totalCount] = await Promise.all([
-        prisma.population.findMany({
-          where: whereConditions,
-          include: {
-            hospital: {
-              select: {
-                hospitalName: true,
-              },
-            },
-          },
-          orderBy: { hospitalCode9eDigit: 'asc' },
-        }),
-        prisma.population.count({ where: whereConditions }),
-      ]);
+    // Calculate total patients
+    const totalPatients = await prisma.patientVisit.count({ where });
 
-      // Transform data
-      const items: PopulationDataItem[] = populations.map(pop => ({
-        id: pop.id,
-        hospitalCode: pop.hospitalCode9eDigit,
-        hospitalName: pop.hospital.hospitalName,
-        year: pop.year,
-        totalPopulation: pop.count,
-      }));
+    // Format occupation data
+    const occupations: OccupationData[] = occupationCounts.map(group => ({
+      occupation: group.occupation || 'ไม่ระบุ',
+      count: group._count.occupation,
+      percentage: ReportUtils.calculatePercentage(group._count.occupation, totalPatients)
+    }));
 
-      return {
-        items,
-        total: totalCount,
-        year,
-      };
-    } catch (error) {
-      console.error('Get population data service error:', error);
-      throw new Error('เกิดข้อผิดพลาดในการดึงข้อมูลประชากร');
-    }
-  }
-
-  // ============================================
-  // UTILITY METHODS
-  // ============================================
-
-  static async validateDateRange(dateFrom?: Date, dateTo?: Date): Promise<boolean> {
-    if (!dateFrom || !dateTo) return true;
-    
-    // Check if dateFrom is before dateTo
-    if (dateFrom > dateTo) {
-      throw new Error('วันที่เริ่มต้นต้องมาก่อนวันที่สิ้นสุด');
-    }
-    
-    // Check if date range is not too large (e.g., max 5 years)
-    const fiveYearsInMs = 5 * 365 * 24 * 60 * 60 * 1000;
-    if (dateTo.getTime() - dateFrom.getTime() > fiveYearsInMs) {
-      throw new Error('ช่วงวันที่ต้องไม่เกิน 5 ปี');
-    }
-    
-    return true;
-  }
-
-  static async validateHospitalAccess(hospitalCode: string, userHospitalCode?: string): Promise<boolean> {
-    // If no user hospital code provided, allow access (for public endpoints)
-    if (!userHospitalCode) return true;
-    
-    // If user hospital code matches requested hospital code, allow access
-    return hospitalCode === userHospitalCode;
+    return {
+      disease,
+      filters,
+      summary: {
+        totalPatients,
+        uniqueOccupations: occupations.length
+      },
+      occupations
+    };
   }
 }

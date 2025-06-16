@@ -18,52 +18,66 @@ const router = Router();
  */
 router.get('/health', ReportController.healthCheck);
 
-/**
- * @route   GET /api/reports/patient-visit-data
- * @desc    Get patient visit data for reports (filtered raw data)
- * @access  Public (for public reports)
- * @query   { dateFrom?: string, dateTo?: string, hospitalCode?: string, hospitalId?: string, diseaseId?: string, gender?: 'M'|'F', ageMin?: number, ageMax?: number, page?: number, limit?: number }
- */
-router.get('/patient-visit-data', ReportController.getPatientVisitData);
+// ============================================
+// REPORT ENDPOINTS
+// ============================================
 
 /**
- * @route   GET /api/reports/incidence-data
- * @desc    Get incidence rate data (aggregated by groupBy parameter)
+ * @route   GET /api/reports/age-groups
+ * @desc    Get age groups report with calculated statistics
  * @access  Public (for public reports)
- * @query   { ...baseQuery, groupBy?: 'month'|'quarter'|'year'|'hospital'|'disease' }
+ * @query   { diseaseId: string, year?: string, hospitalCode?: string, gender?: 'MALE'|'FEMALE'|'all', ageGroup?: string, occupation?: string }
  */
-router.get('/incidence-data', ReportController.getIncidenceData);
+router.get('/age-groups', ReportController.getAgeGroupsReport);
 
 /**
- * @route   GET /api/reports/gender-data
- * @desc    Get gender ratio data (aggregated by groupBy parameter)
+ * @route   GET /api/reports/gender-ratio
+ * @desc    Get gender ratio report with calculated statistics
  * @access  Public (for public reports)
- * @query   { ...baseQuery, groupBy?: 'age_group'|'hospital'|'disease'|'month' }
+ * @query   { diseaseId: string, year?: string, hospitalCode?: string, gender?: 'MALE'|'FEMALE'|'all', ageGroup?: string, occupation?: string }
  */
-router.get('/gender-data', ReportController.getGenderData);
+router.get('/gender-ratio', ReportController.getGenderRatioReport);
 
 /**
- * @route   GET /api/reports/trend-data
- * @desc    Get trend analysis data (time-series data)
+ * @route   GET /api/reports/incidence-rates
+ * @desc    Get incidence rates report with calculated statistics
  * @access  Public (for public reports)
- * @query   { ...baseQuery, groupBy?: 'day'|'week'|'month'|'quarter'|'year', trendType?: 'patient_count'|'incidence_rate'|'gender_ratio' }
+ * @query   { diseaseId: string, year?: string, hospitalCode?: string, gender?: 'MALE'|'FEMALE'|'all', ageGroup?: string, occupation?: string }
  */
-router.get('/trend-data', ReportController.getTrendData);
+router.get('/incidence-rates', ReportController.getIncidenceRatesReport);
 
 /**
- * @route   GET /api/reports/population-data
- * @desc    Get population data for incidence rate calculations
+ * @route   GET /api/reports/occupation
+ * @desc    Get occupation report with calculated statistics
  * @access  Public (for public reports)
- * @query   { year?: number, hospitalCode?: string, hospitalId?: string, groupBy?: 'hospital'|'year'|'age_group'|'gender' }
+ * @query   { diseaseId: string, year?: string, hospitalCode?: string, gender?: 'MALE'|'FEMALE'|'all', ageGroup?: string, occupation?: string }
  */
-router.get('/population-data', ReportController.getPopulationData);
+router.get('/occupation', ReportController.getOccupationReport);
+
+// ============================================
+// UTILITY ENDPOINTS
+// ============================================
 
 /**
- * @route   GET /api/reports/filter-options
- * @desc    Get available filter options for report forms
+ * @route   GET /api/reports/diseases
+ * @desc    Get all diseases for dropdown options
  * @access  Public
  */
-router.get('/filter-options', ReportController.getAvailableFilters);
+router.get('/diseases', ReportController.getDiseases);
+
+/**
+ * @route   GET /api/reports/hospitals
+ * @desc    Get all hospitals for dropdown options
+ * @access  Public
+ */
+router.get('/hospitals', ReportController.getHospitals);
+
+/**
+ * @route   GET /api/reports/public-stats
+ * @desc    Get public statistics (total diseases, patients, etc.)
+ * @access  Public
+ */
+router.get('/public-stats', ReportController.getPublicStats);
 
 // ============================================
 // HEALTH CHECK & DOCUMENTATION
@@ -79,95 +93,100 @@ router.get('/docs', (req, res) => {
     success: true,
     message: 'Report API Documentation',
     data: {
-      version: '1.0.0',
-      description: 'Public Report Data API - provides filtered raw data for frontend calculations',
-      philosophy: 'Backend sends filtered raw data, Frontend calculates statistics and ratios',
+      version: '2.0.0',
+      description: 'Public Report API - provides calculated statistics and reports',
+      philosophy: 'Backend calculates all statistics, Frontend displays results',
       endpoints: {
-        'GET /api/reports/patient-visit-data': {
-          description: 'Get filtered patient visit raw data',
-          purpose: 'Base data for all report calculations',
-          returns: 'Raw patient visit records with basic filters applied',
+        'GET /api/reports/age-groups': {
+          description: 'Get age groups report with calculated percentages and incidence rates',
+          purpose: 'Display age distribution analysis with ready-to-use statistics',
+          returns: 'Age groups with counts, percentages, and incidence rates',
           queryParams: [
-            'dateFrom, dateTo - Date range filter',
-            'hospitalCode, hospitalId - Hospital filter',
-            'diseaseId - Disease filter',
-            'gender - Gender filter (M/F)',
-            'ageMin, ageMax - Age range filter',
-            'page, limit - Pagination',
+            'diseaseId (required) - Disease UUID',
+            'year - Filter by year (default: all)',
+            'hospitalCode - Filter by hospital (default: all)',
+            'gender - Filter by gender: MALE|FEMALE|all (default: all)',
+            'ageGroup - Filter by age group (default: all)',
+            'occupation - Filter by occupation (default: all)',
           ],
         },
-        'GET /api/reports/incidence-data': {
-          description: 'Get patient visit data aggregated by specified grouping',
-          purpose: 'Data for incidence rate calculations (Frontend: patientCount ÷ population × 100,000)',
-          returns: 'Raw data + aggregated counts by groupBy parameter',
-          queryParams: ['...baseQuery', 'groupBy - month|quarter|year|hospital|disease'],
+        'GET /api/reports/gender-ratio': {
+          description: 'Get gender ratio report with calculated ratios and percentages',
+          purpose: 'Display gender distribution analysis with normalized ratios',
+          returns: 'Gender counts, ratios (e.g., 1.5:1), and percentages',
+          queryParams: ['...same as age-groups'],
         },
-        'GET /api/reports/gender-data': {
-          description: 'Get patient visit data grouped for gender analysis',
-          purpose: 'Data for gender ratio calculations (Frontend: male:female ratios)',
-          returns: 'Raw data + male/female counts by age groups or other groupings',
-          queryParams: ['...baseQuery', 'groupBy - age_group|hospital|disease|month'],
+        'GET /api/reports/incidence-rates': {
+          description: 'Get incidence rates report with calculated rates per 100,000 population',
+          purpose: 'Display incidence, mortality, and case fatality rates by hospital',
+          returns: 'Overall rates and detailed hospital breakdown with calculated statistics',
+          queryParams: ['...same as age-groups'],
         },
-        'GET /api/reports/trend-data': {
-          description: 'Get time-series patient visit data',
-          purpose: 'Data for trend analysis charts',
-          returns: 'Raw data + time-based aggregations',
-          queryParams: [
-            '...baseQuery',
-            'groupBy - day|week|month|quarter|year',
-            'trendType - patient_count|incidence_rate|gender_ratio',
-          ],
+        'GET /api/reports/occupation': {
+          description: 'Get occupation report with calculated percentages',
+          purpose: 'Display occupation distribution analysis',
+          returns: 'Occupation counts and percentages, sorted by frequency',
+          queryParams: ['...same as age-groups'],
         },
-        'GET /api/reports/population-data': {
-          description: 'Get population data for incidence calculations',
-          purpose: 'Population denominators for incidence rate calculations',
-          returns: 'Population counts by hospital/year',
-          queryParams: [
-            'year - Target year',
-            'hospitalCode, hospitalId - Hospital filter',
-            'groupBy - hospital|year|age_group|gender',
-          ],
+        'GET /api/reports/diseases': {
+          description: 'Get all diseases for dropdown options',
+          purpose: 'Provide disease selection options for report forms',
+          returns: 'List of active diseases with IDs and names',
         },
-        'GET /api/reports/filter-options': {
-          description: 'Get available filter options for forms',
-          purpose: 'Provide dropdown options and validation rules',
-          returns: 'Available filters, date ranges, age groups, etc.',
+        'GET /api/reports/hospitals': {
+          description: 'Get all hospitals for dropdown options',
+          purpose: 'Provide hospital selection options for report forms',
+          returns: 'List of active hospitals formatted for dropdowns',
+        },
+        'GET /api/reports/public-stats': {
+          description: 'Get public statistics summary',
+          purpose: 'Display overview statistics on public dashboard',
+          returns: 'Total diseases, total patients, current month patients',
         },
       },
       calculations: {
-        incidenceRate: 'Frontend: (patientCount ÷ population) × 100,000',
-        genderRatio: 'Frontend: normalize male:female ratios (e.g., 1.5:1)',
-        trends: 'Frontend: time-series analysis and percentage changes',
-        ageDistribution: 'Frontend: percentage distributions by age groups',
+        incidenceRate: 'Backend: (patientCount ÷ population) × 100,000',
+        mortalityRate: 'Backend: (deaths ÷ population) × 100,000',
+        caseFatalityRate: 'Backend: (deaths ÷ totalPatients) × 100',
+        genderRatio: 'Backend: normalize male:female ratios (e.g., 1.5:1)',
+        percentages: 'Backend: (part ÷ total) × 100',
+        ageGroups: 'Backend: categorize ages and calculate distributions',
       },
       dataSecurity: {
         access: 'Public endpoints - no authentication required',
-        filtering: 'Data pre-filtered by backend for performance',
+        calculation: 'All calculations performed on backend for accuracy',
         privacy: 'No personal identifiable information in aggregated data',
       },
       performance: {
-        pagination: 'All endpoints support pagination (default: limit=1000)',
+        calculation: 'Backend calculations for optimal performance',
         caching: 'Responses can be cached by frontend for better UX',
-        maxRecords: 'Maximum 5000 records per request to prevent overload',
+        efficiency: 'Minimal data transfer with pre-calculated results',
       },
       usage: {
         workflow: [
           '1. Frontend calls report endpoints with filters',
-          '2. Backend returns filtered raw data',
-          '3. Frontend performs calculations (ratios, percentages, trends)',
-          '4. Frontend displays charts and tables',
+          '2. Backend calculates all statistics and rates',
+          '3. Backend returns ready-to-display results',
+          '4. Frontend displays charts and tables directly',
         ],
         example: {
-          incidenceRate: [
-            'GET /api/reports/incidence-data?diseaseId=123&year=2024&groupBy=month',
-            'GET /api/reports/population-data?year=2024',
-            'Frontend: calculate monthly incidence rates',
+          ageGroups: [
+            'GET /api/reports/age-groups?diseaseId=123e4567-e89b-12d3-a456-426614174000&year=2024',
+            'Returns: age groups with counts, percentages, and incidence rates',
           ],
           genderRatio: [
-            'GET /api/reports/gender-data?diseaseId=123&groupBy=age_group',
-            'Frontend: calculate male:female ratios by age group',
+            'GET /api/reports/gender-ratio?diseaseId=123e4567-e89b-12d3-a456-426614174000',
+            'Returns: gender counts, normalized ratios, and percentages',
+          ],
+          incidenceRates: [
+            'GET /api/reports/incidence-rates?diseaseId=123e4567-e89b-12d3-a456-426614174000&hospitalCode=123456789',
+            'Returns: calculated incidence, mortality, and case fatality rates',
           ],
         },
+      },
+      changelog: {
+        'v2.0.0': 'Complete redesign - Backend now calculates all statistics',
+        'v1.0.0': 'Initial version - Frontend calculations (deprecated)',
       },
       timestamp: new Date().toISOString(),
     },

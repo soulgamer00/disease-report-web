@@ -88,16 +88,17 @@ export const authenticateToken = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // Extract token from Authorization header or cookies
-    const authHeader = req.headers.authorization;
+    // Extract token from cookies first, then Authorization header (prioritize cookies)
     const cookieToken = req.cookies?.accessToken;
+    const authHeader = req.headers.authorization;
     
     let token: string | undefined;
     
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7); // Remove 'Bearer ' prefix
-    } else if (cookieToken) {
+    // Check cookies first (preferred method)
+    if (cookieToken) {
       token = cookieToken;
+    } else if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7); // Remove 'Bearer ' prefix
     }
 
     if (!token) {
@@ -191,15 +192,16 @@ export const optionalAuth = async (
 ): Promise<void> => {
   try {
     // Try to authenticate, but don't fail if no token
-    const authHeader = req.headers.authorization;
     const cookieToken = req.cookies?.accessToken;
+    const authHeader = req.headers.authorization;
     
     let token: string | undefined;
     
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7);
-    } else if (cookieToken) {
+    // Check cookies first (preferred method)
+    if (cookieToken) {
       token = cookieToken;
+    } else if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
     }
 
     if (token) {
@@ -244,15 +246,16 @@ export const optionalAuth = async (
 // ============================================
 
 export const extractTokenFromRequest = (req: Request): string | null => {
-  const authHeader = req.headers.authorization;
   const cookieToken = req.cookies?.accessToken;
+  const authHeader = req.headers.authorization;
+  
+  // Prioritize cookies over Authorization header
+  if (cookieToken) {
+    return cookieToken;
+  }
   
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.substring(7);
-  }
-  
-  if (cookieToken) {
-    return cookieToken;
   }
   
   return null;

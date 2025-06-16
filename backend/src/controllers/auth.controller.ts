@@ -38,7 +38,7 @@ export class AuthController {
         maxAge: config.cookie.maxAge,
       });
 
-      // Optionally set access token as cookie too
+      // Set access token as httpOnly cookie
       res.cookie('accessToken', result.accessToken, {
         httpOnly: true,
         secure: config.server.nodeEnv === 'production',
@@ -46,26 +46,25 @@ export class AuthController {
         maxAge: 15 * 60 * 1000, // 15 minutes (same as JWT expiry)
       });
 
-      // Return success response
+      // Return success response (WITHOUT tokens in body)
       res.status(200).json({
         success: true,
         message: 'เข้าสู่ระบบสำเร็จ',
         data: {
           user: result.user,
-          accessToken: result.accessToken,
-          refreshToken: result.refreshToken,
           expiresIn: result.expiresIn,
         },
       });
     } catch (error) {
       console.error('Login error:', error);
       
-      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ';
+      const errorMessage = error instanceof Error ? 
+        error.message : 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ';
       
-      res.status(401).json({
+      res.status(400).json({
         success: false,
         message: errorMessage,
-        error: 'Authentication failed',
+        error: 'Login failed',
       });
     }
   }
@@ -96,14 +95,13 @@ export class AuthController {
       res.status(200).json({
         success: true,
         message: 'เปลี่ยนรหัสผ่านสำเร็จ',
-        data: {
-          updatedAt: result.updatedAt,
-        },
+        data: result,
       });
     } catch (error) {
       console.error('Change password error:', error);
       
-      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน';
+      const errorMessage = error instanceof Error ? 
+        error.message : 'เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน';
       
       res.status(400).json({
         success: false,
@@ -119,11 +117,8 @@ export class AuthController {
   
   static async refreshToken(req: Request, res: Response): Promise<void> {
     try {
-      // Get refresh token from cookies or request body
-      const refreshTokenFromCookie = req.cookies?.refreshToken;
-      const refreshTokenFromBody = req.body?.refreshToken;
-      
-      const refreshToken = refreshTokenFromCookie || refreshTokenFromBody;
+      // Get refresh token from cookies only (not from request body)
+      const refreshToken = req.cookies?.refreshToken;
 
       if (!refreshToken) {
         res.status(400).json({
@@ -157,20 +152,19 @@ export class AuthController {
         maxAge: 15 * 60 * 1000, // 15 minutes
       });
 
-      // Return success response
+      // Return success response (WITHOUT tokens in body)
       res.status(200).json({
         success: true,
         message: 'ต่ออายุ token สำเร็จ',
         data: {
-          accessToken: result.accessToken,
-          refreshToken: result.refreshToken,
           expiresIn: result.expiresIn,
         },
       });
     } catch (error) {
       console.error('Refresh token error:', error);
       
-      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการต่ออายุ token';
+      const errorMessage = error instanceof Error ? 
+        error.message : 'เกิดข้อผิดพลาดในการต่ออายุ token';
       
       res.status(401).json({
         success: false,
@@ -210,7 +204,8 @@ export class AuthController {
     } catch (error) {
       console.error('Get profile error:', error);
       
-      const errorMessage = error instanceof Error ? error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลโปรไฟล์';
+      const errorMessage = error instanceof Error ? 
+        error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลโปรไฟล์';
       
       res.status(500).json({
         success: false,
