@@ -101,7 +101,7 @@
             </div>
             <div class="ml-4">
               <h1 class="text-xl font-semibold text-gray-900">ระบบรายงานโรค</h1>
-              <p class="text-sm text-gray-500">จังหวัดเพชรบูรณ์</p>
+              <p class="text-sm text-gray-500">จังหวัดพิษณุโลก</p>
             </div>
           </div>
 
@@ -120,12 +120,19 @@
               รายงาน
             </a>
             {#if currentUser?.userRoleId && currentUser.userRoleId <= 2}
-              <a 
-                href="/admin" 
-                class="text-gray-900 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 {$page.url.pathname.startsWith('/admin') ? 'text-blue-600 bg-blue-50' : ''}"
-              >
-                จัดการระบบ
-              </a>
+              <!-- Admin Dropdown Menu -->
+              <div class="relative">
+                <button
+                  type="button"
+                  class="text-gray-900 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center {$page.url.pathname.startsWith('/admin') ? 'text-blue-600 bg-blue-50' : ''}"
+                  onclick={() => goto('/admin/hospitals')}
+                >
+                  จัดการระบบ
+                  <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
             {/if}
           </nav>
 
@@ -244,7 +251,7 @@
           </a>
           {#if currentUser?.userRoleId && currentUser.userRoleId <= 2}
             <a 
-              href="/admin" 
+              href="/admin/hospitals" 
               class="block px-3 py-2 rounded-md text-base font-medium text-gray-900 hover:text-blue-600 hover:bg-gray-50 {$page.url.pathname.startsWith('/admin') ? 'text-blue-600 bg-blue-50' : ''}"
             >
               จัดการระบบ
@@ -267,7 +274,7 @@
       <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between items-center">
           <div class="text-sm text-gray-500">
-            © 2025 สำนักงานสาธารณสุขจังหวัดเพชรบูรณ์
+            © 2025 สำนักงานสาธารณสุขจังหวัดพิษณุโลก
           </div>
           <div class="text-sm text-gray-500">
             เวอร์ชัน 1.0.0

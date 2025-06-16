@@ -21,16 +21,17 @@ interface HospitalQueryParams {
   isActive?: boolean;
 }
 
+// ✅ แก้ไข Hospital interface ให้ตรงกับ backend
 interface Hospital {
   id: string;
   hospitalName: string;
   hospitalCode9eDigit: string;
-  hospitalCode9Digit?: string | null;
-  hospitalCode5Digit?: string | null;
-  organizationType?: string | null;
-  healthServiceType?: string | null;
-  affiliation?: string | null;
-  departmentDivision?: string | null;
+  hospitalCode9Digit: string | null;    // ✅ แก้ไข: เอา ? ออก
+  hospitalCode5Digit: string | null;    // ✅ แก้ไข: เอา ? ออก
+  organizationType: string | null;      // ✅ แก้ไข: เอา ? ออก
+  healthServiceType: string | null;     // ✅ แก้ไข: เอา ? ออก
+  affiliation: string | null;           // ✅ แก้ไข: เอา ? ออก
+  departmentDivision: string | null;    // ✅ แก้ไข: เอา ? ออก
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
