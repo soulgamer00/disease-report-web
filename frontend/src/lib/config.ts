@@ -1,27 +1,112 @@
 // frontend/src/lib/config.ts
 // Single source of truth for all frontend configuration
+// Uses SvelteKit environment variables properly
+
+import { browser } from '$app/environment';
+import { env } from '$env/dynamic/public';
 
 // ============================================
-// ENVIRONMENT CONFIGURATION
+// ENVIRONMENT DETECTION
+// ============================================
+
+/**
+ * Get current environment based on NODE_ENV or URL
+ */
+function getEnvironment(): 'development' | 'production' | 'test' {
+  // In SvelteKit, check PUBLIC_NODE_ENV first
+  if (env.PUBLIC_NODE_ENV) {
+    return env.PUBLIC_NODE_ENV as 'development' | 'production' | 'test';
+  }
+  
+  // Browser-based detection as fallback
+  if (browser) {
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    
+    // Development indicators
+    if (hostname === 'localhost' || 
+        hostname === '127.0.0.1' || 
+        hostname.endsWith('.local') ||
+        protocol === 'http:') {
+      return 'development';
+    }
+    
+    // Production by default
+    return 'production';
+  }
+  
+  // Server-side default
+  return 'development';
+}
+
+/**
+ * Get API base URL based on environment
+ */
+function getApiBaseUrl(): string {
+  // Use explicit environment variable if provided
+  if (env.PUBLIC_API_BASE_URL) {
+    return env.PUBLIC_API_BASE_URL;
+  }
+  
+  const environment = getEnvironment();
+  
+  switch (environment) {
+    case 'development':
+      // Local development - use localhost:3000
+      return 'http://localhost:3000/api';
+      
+    case 'production':
+      // Production - use relative path (assumes frontend and backend on same domain)
+      // or can be overridden by PUBLIC_API_BASE_URL
+      return '/api';
+      
+    case 'test':
+      // Test environment
+      return 'http://localhost:3001/api';
+      
+    default:
+      return '/api';
+  }
+}
+
+/**
+ * Check if running in development mode
+ */
+export function isDevelopment(): boolean {
+  return getEnvironment() === 'development';
+}
+
+/**
+ * Check if running in production mode
+ */
+export function isProduction(): boolean {
+  return getEnvironment() === 'production';
+}
+
+// ============================================
+// MAIN CONFIGURATION
 // ============================================
 
 export const APP_CONFIG = {
+  // Environment
+  ENVIRONMENT: getEnvironment(),
+  
   // API Configuration
-  API_BASE_URL: 'http://localhost:3000/api',
+  API_BASE_URL: getApiBaseUrl(),
   
   // App Information
-  APP_NAME: 'ระบบรายงานโรค',
-  APP_VERSION: '1.0.0',
-  APP_DESCRIPTION: 'ระบบรายงานการติดตาม การเฝ้าระวัง และควบคุมโรค',
+  APP_NAME: env.PUBLIC_APP_NAME || 'ระบบรายงานโรค',
+  APP_VERSION: env.PUBLIC_APP_VERSION || '1.0.0',
+  APP_DESCRIPTION: env.PUBLIC_APP_DESCRIPTION || 'ระบบรายงานการติดตาม การเฝ้าระวัง และควบคุมโรค',
   
   // Timezone
-  TIMEZONE: 'Asia/Bangkok',
+  TIMEZONE: env.PUBLIC_TIMEZONE || 'Asia/Bangkok',
   
   // Pagination Defaults
   PAGINATION: {
-    DEFAULT_PAGE_SIZE: 20,
+    DEFAULT_PAGE_SIZE: parseInt(env.PUBLIC_DEFAULT_PAGE_SIZE || '20', 10),
     PAGE_SIZE_OPTIONS: [10, 20, 50, 100] as const,
-    MAX_PAGE_SIZE: 100,
+    MAX_PAGE_SIZE: parseInt(env.PUBLIC_MAX_PAGE_SIZE || '100', 10),
   },
   
   // Date Format
@@ -36,8 +121,8 @@ export const APP_CONFIG = {
   
   // File Upload Configuration
   FILE_UPLOAD: {
-    MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
-    MAX_FILES_PER_REQUEST: 5,
+    MAX_FILE_SIZE: parseInt(env.PUBLIC_MAX_FILE_SIZE || '10485760', 10), // 10MB default
+    MAX_FILES_PER_REQUEST: parseInt(env.PUBLIC_MAX_FILES_PER_REQUEST || '5', 10),
     ALLOWED_TYPES: [
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
       'application/vnd.ms-excel', // .xls
@@ -46,7 +131,7 @@ export const APP_CONFIG = {
       'image/jpeg', // .jpg
       'image/png', // .png
     ] as const,
-    ALLOWED_EXTENSIONS: ['xlsx', 'xls', 'csv', 'pdf', 'jpg', 'jpeg', 'png'] as const,
+    ALLOWED_EXTENSIONS: (env.PUBLIC_ALLOWED_FILE_TYPES || 'xlsx,xls,csv,pdf,jpg,jpeg,png').split(','),
   },
   
   // Authentication Configuration
@@ -54,14 +139,14 @@ export const APP_CONFIG = {
     TOKEN_KEY: 'auth_token',
     REFRESH_TOKEN_KEY: 'refresh_token',
     USER_KEY: 'user_info',
-    AUTO_LOGOUT_TIME: 15 * 60 * 1000, // 15 minutes
-    REMEMBER_LOGIN_DAYS: 7,
+    AUTO_LOGOUT_TIME: parseInt(env.PUBLIC_SESSION_TIMEOUT || '900000', 10), // 15 minutes default
+    REMEMBER_LOGIN_DAYS: parseInt(env.PUBLIC_REMEMBER_LOGIN_DAYS || '7', 10),
   },
   
   // UI Configuration
   UI: {
-    THEME: 'light' as const,
-    LANGUAGE: 'th' as const,
+    THEME: (env.PUBLIC_DEFAULT_THEME as 'light' | 'dark') || 'light',
+    LANGUAGE: (env.PUBLIC_DEFAULT_LANGUAGE as 'th' | 'en') || 'th',
     SIDEBAR_WIDTH: 280,
     HEADER_HEIGHT: 64,
     FOOTER_HEIGHT: 48,
@@ -72,8 +157,8 @@ export const APP_CONFIG = {
   // Chart Configuration
   CHARTS: {
     COLORS: {
-      PRIMARY: '#3B82F6',
-      SECONDARY: '#EF4444',
+      PRIMARY: env.PUBLIC_CHART_PRIMARY_COLOR || '#3B82F6',
+      SECONDARY: env.PUBLIC_CHART_SECONDARY_COLOR || '#EF4444',
       SUCCESS: '#10B981',
       WARNING: '#F59E0B',
       INFO: '#06B6D4',
@@ -81,46 +166,82 @@ export const APP_CONFIG = {
       PINK: '#EC4899',
       INDIGO: '#6366F1',
     } as const,
-    DEFAULT_HEIGHT: 300,
-    ANIMATION_DURATION: 1000,
+    DEFAULT_HEIGHT: parseInt(env.PUBLIC_CHART_DEFAULT_HEIGHT || '300', 10),
+    ANIMATION_DURATION: parseInt(env.PUBLIC_CHART_ANIMATION_DURATION || '1000', 10),
   },
   
   // Table Configuration
   TABLE: {
-    DEFAULT_PAGE_SIZE: 20,
+    DEFAULT_PAGE_SIZE: parseInt(env.PUBLIC_DEFAULT_PAGE_SIZE || '20', 10),
     ROWS_PER_PAGE_OPTIONS: [10, 20, 50, 100] as const,
-    MAX_ROWS_PER_PAGE: 100,
-    STICKY_HEADER: true,
+    MAX_ROWS_PER_PAGE: parseInt(env.PUBLIC_MAX_PAGE_SIZE || '100', 10),
+    STICKY_HEADER: (env.PUBLIC_STICKY_TABLE_HEADER || 'true') === 'true',
   },
   
   // Form Configuration
   FORM: {
-    DEBOUNCE_DELAY: 300, // ms
-    AUTO_SAVE_DELAY: 2000, // ms
-    VALIDATION_DELAY: 500, // ms
-    MAX_TEXT_LENGTH: 255,
-    MAX_TEXTAREA_LENGTH: 1000,
+    DEBOUNCE_DELAY: parseInt(env.PUBLIC_FORM_DEBOUNCE_DELAY || '300', 10),
+    AUTO_SAVE_DELAY: parseInt(env.PUBLIC_FORM_AUTO_SAVE_DELAY || '2000', 10),
+    VALIDATION_DELAY: parseInt(env.PUBLIC_FORM_VALIDATION_DELAY || '500', 10),
+    MAX_TEXT_LENGTH: parseInt(env.PUBLIC_MAX_TEXT_LENGTH || '255', 10),
+    MAX_TEXTAREA_LENGTH: parseInt(env.PUBLIC_MAX_TEXTAREA_LENGTH || '1000', 10),
   },
   
   // Cache Configuration
   CACHE: {
-    ENABLED: true,
-    DEFAULT_TTL: 5 * 60 * 1000, // 5 minutes
-    MAX_ENTRIES: 100,
-    STORAGE_KEY: 'app_cache',
+    ENABLED: (env.PUBLIC_ENABLE_CACHE || 'true') === 'true',
+    DEFAULT_TTL: parseInt(env.PUBLIC_CACHE_TTL || '300000', 10), // 5 minutes
+    MAX_ENTRIES: parseInt(env.PUBLIC_CACHE_MAX_ENTRIES || '100', 10),
+    STORAGE_KEY: env.PUBLIC_CACHE_STORAGE_KEY || 'app_cache',
   },
   
-  // Development Configuration
-  DEV: {
-    ENABLE_LOGGER: true,
-    ENABLE_PERFORMANCE_MONITORING: true,
-    MOCK_API: false,
-    SHOW_DEBUG_INFO: false,
+  // Performance Configuration
+  PERFORMANCE: {
+    REQUEST_TIMEOUT: parseInt(env.PUBLIC_REQUEST_TIMEOUT || '30000', 10), // 30 seconds
+    RETRY_ATTEMPTS: parseInt(env.PUBLIC_RETRY_ATTEMPTS || '3', 10),
+    RETRY_DELAY: parseInt(env.PUBLIC_RETRY_DELAY || '1000', 10),
   },
 } as const;
 
 // ============================================
-// API ENDPOINTS MAPPING
+// FEATURE FLAGS (Environment-based)
+// ============================================
+
+export const FEATURES = {
+  // Core Features
+  AUTHENTICATION: true,
+  PATIENT_MANAGEMENT: true,
+  REPORTING: true,
+  
+  // Admin Features
+  USER_MANAGEMENT: (env.PUBLIC_ENABLE_USER_MANAGEMENT || 'true') === 'true',
+  HOSPITAL_MANAGEMENT: (env.PUBLIC_ENABLE_HOSPITAL_MANAGEMENT || 'true') === 'true',
+  DISEASE_MANAGEMENT: (env.PUBLIC_ENABLE_DISEASE_MANAGEMENT || 'true') === 'true',
+  
+  // Advanced Features
+  EXCEL_EXPORT: (env.PUBLIC_ENABLE_EXCEL_EXPORT || 'true') === 'true',
+  PDF_EXPORT: (env.PUBLIC_ENABLE_PDF_EXPORT || 'false') === 'true',
+  CHART_VISUALIZATION: (env.PUBLIC_ENABLE_CHARTS || 'true') === 'true',
+  ADVANCED_SEARCH: (env.PUBLIC_ENABLE_ADVANCED_SEARCH || 'true') === 'true',
+  
+  // UI Features
+  DARK_MODE: (env.PUBLIC_ENABLE_DARK_MODE || 'false') === 'true',
+  RESPONSIVE_DESIGN: (env.PUBLIC_ENABLE_RESPONSIVE || 'true') === 'true',
+  ANIMATIONS: (env.PUBLIC_ENABLE_ANIMATIONS || 'true') === 'true',
+  
+  // Experimental Features
+  PUSH_NOTIFICATIONS: (env.PUBLIC_ENABLE_PUSH_NOTIFICATIONS || 'false') === 'true',
+  OFFLINE_MODE: (env.PUBLIC_ENABLE_OFFLINE_MODE || 'false') === 'true',
+  PWA: (env.PUBLIC_ENABLE_PWA || 'false') === 'true',
+  
+  // Development Features (only in development)
+  DEBUG_MODE: isDevelopment() && (env.PUBLIC_ENABLE_DEBUG_MODE || 'true') === 'true',
+  MOCK_DATA: isDevelopment() && (env.PUBLIC_ENABLE_MOCK_DATA || 'false') === 'true',
+  PERFORMANCE_MONITORING: (env.PUBLIC_ENABLE_PERFORMANCE_MONITORING || 'true') === 'true',
+} as const;
+
+// ============================================
+// API ENDPOINTS MAPPING (Complete based on backend routes)
 // ============================================
 
 export const API_ENDPOINTS = {
@@ -149,7 +270,21 @@ export const API_ENDPOINTS = {
     CREATE: '/patient-visits',
     UPDATE: (id: string) => `/patient-visits/${id}`,
     DELETE: (id: string) => `/patient-visits/${id}`,
+    
+    // Export & Search
     EXPORT_EXCEL: '/patient-visits/export/excel',
+    SEARCH_ADVANCED: '/patient-visits/search/advanced',
+    FILTERS_OPTIONS: '/patient-visits/filters/options',
+    
+    // Bulk Operations (Admin+)
+    BULK_IMPORT: '/patient-visits/bulk-import',
+    BULK_UPDATE: '/patient-visits/bulk-update',
+    
+    // Hospital-specific Routes (User+)
+    MY_HOSPITAL: '/patient-visits/my-hospital',
+    MY_HOSPITAL_STATISTICS: '/patient-visits/my-hospital/statistics',
+    MY_HOSPITAL_HISTORY: '/patient-visits/my-hospital/history',
+    
     HEALTH: '/patient-visits/health',
   },
   
@@ -157,49 +292,15 @@ export const API_ENDPOINTS = {
   DISEASES: {
     LIST: '/diseases',
     BY_ID: (id: string) => `/diseases/${id}`,
-    SEARCH: '/diseases/search',
+    SYMPTOMS: (id: string) => `/diseases/${id}/symptoms`,
+    STATISTICS: '/diseases/statistics/summary',
+    
+    // Protected Routes (Superadmin only)
     CREATE: '/diseases',
     UPDATE: (id: string) => `/diseases/${id}`,
     DELETE: (id: string) => `/diseases/${id}`,
-    STATISTICS: '/diseases/statistics/summary',
+    
     HEALTH: '/diseases/health',
-  },
-  
-  // Hospital Endpoints
-  HOSPITALS: {
-    LIST: '/hospitals',
-    BY_ID: (id: string) => `/hospitals/${id}`,
-    BY_CODE: (code: string) => `/hospitals/code/${code}`,
-    SEARCH: '/hospitals/search',
-    MY_HOSPITAL: '/hospitals/my-hospital',
-    CREATE: '/hospitals',
-    UPDATE: (id: string) => `/hospitals/${id}`,
-    DELETE: (id: string) => `/hospitals/${id}`,
-    STATISTICS: '/hospitals/statistics/summary',
-    HEALTH: '/hospitals/health',
-  },
-  
-  // User Endpoints
-  USERS: {
-    LIST: '/users',
-    BY_ID: (id: string) => `/users/${id}`,
-    PROFILE: '/users/profile',
-    CREATE: '/users',
-    UPDATE: (id: string) => `/users/${id}`,
-    DELETE: (id: string) => `/users/${id}`,
-    CHANGE_PASSWORD: (id: string) => `/users/${id}/password`,
-    HEALTH: '/users/health',
-  },
-  
-  // Report Endpoints
-  REPORTS: {
-    PATIENT_VISITS: '/reports/patient-visits',
-    INCIDENCE_DATA: '/reports/incidence-data',
-    GENDER_DATA: '/reports/gender-data',
-    TREND_DATA: '/reports/trend-data',
-    EXPORT_PDF: '/reports/export/pdf',
-    EXPORT_EXCEL: '/reports/export/excel',
-    HEALTH: '/reports/health',
   },
   
   // Symptom Endpoints
@@ -207,11 +308,30 @@ export const API_ENDPOINTS = {
     LIST: '/symptoms',
     BY_ID: (id: string) => `/symptoms/${id}`,
     BY_DISEASE: (diseaseId: string) => `/symptoms/disease/${diseaseId}`,
+    STATISTICS: '/symptoms/statistics/summary',
+    
+    // Protected Routes (Superadmin only)
     CREATE: '/symptoms',
     UPDATE: (id: string) => `/symptoms/${id}`,
     DELETE: (id: string) => `/symptoms/${id}`,
-    STATISTICS: '/symptoms/statistics/summary',
+    
     HEALTH: '/symptoms/health',
+  },
+  
+  // Hospital Endpoints
+  HOSPITALS: {
+    LIST: '/hospitals',
+    BY_ID: (id: string) => `/hospitals/${id}`,
+    BY_CODE: (code: string) => `/hospitals/code/${code}`,
+    CODES_MAP: '/hospitals/codes/map',
+    STATISTICS: '/hospitals/statistics/summary',
+    
+    // Protected Routes (Superadmin only)
+    CREATE: '/hospitals',
+    UPDATE: (id: string) => `/hospitals/${id}`,
+    DELETE: (id: string) => `/hospitals/${id}`,
+    
+    HEALTH: '/hospitals/health',
   },
   
   // Population Endpoints
@@ -222,14 +342,68 @@ export const API_ENDPOINTS = {
     BY_YEAR: (year: number) => `/populations/year/${year}`,
     STATISTICS: '/populations/statistics/summary',
     TRENDS: '/populations/trends',
+    
+    // Protected Routes (Admin+)
     MY_HOSPITAL: '/populations/my-hospital',
     CREATE: '/populations',
     UPDATE: (id: string) => `/populations/${id}`,
     DELETE: (id: string) => `/populations/${id}`,
+    
     HEALTH: '/populations/health',
   },
   
-  // Health Check
+  // User Endpoints (Admin+ only)
+  USERS: {
+    LIST: '/users',
+    BY_ID: (id: string) => `/users/${id}`,
+    CREATE: '/users',
+    UPDATE: (id: string) => `/users/${id}`,
+    DELETE: (id: string) => `/users/${id}`,
+    
+    // Admin password change
+    ADMIN_CHANGE_PASSWORD: (id: string) => `/users/${id}/password`,
+    
+    // Profile management (Any user)
+    PROFILE: '/users/profile',
+    UPDATE_PROFILE: '/users/profile',
+    CHANGE_PASSWORD: '/users/profile/password',
+    
+    // Debug & Docs (Development)
+    DEBUG_PERMISSIONS: '/users/debug/permissions',
+    DOCS: '/users/docs',
+    
+    HEALTH: '/users/health',
+  },
+  
+  // Report Endpoints
+  REPORTS: {
+    // Age & Demographics
+    AGE_GROUPS: '/reports/age-groups',
+    GENDER_RATIO: '/reports/gender-ratio',
+    OCCUPATION: '/reports/occupation',
+    
+    // Incidence & Statistics
+    INCIDENCE_RATES: '/reports/incidence-rates',
+    
+    // Support Data
+    DISEASES: '/reports/diseases',
+    HOSPITALS: '/reports/hospitals',
+    PUBLIC_STATS: '/reports/public-stats',
+    
+    // Additional Reports (from backend routes)
+    PATIENT_VISIT_DATA: '/reports/patient-visit-data',
+    INCIDENCE_DATA: '/reports/incidence-data',
+    GENDER_DATA: '/reports/gender-data',
+    TREND_DATA: '/reports/trend-data',
+    POPULATION_DATA: '/reports/population-data',
+    FILTER_OPTIONS: '/reports/filter-options',
+    
+    DOCS: '/reports/docs',
+    HEALTH: '/reports/health',
+  },
+  
+  // Root & Health Check
+  ROOT: '/',
   HEALTH: '/health',
 } as const;
 
@@ -257,7 +431,7 @@ export const ROUTES = {
   REPORT_GENDER: '/reports/gender',
   REPORT_TREND: '/reports/trend',
   
-  // Admin Routes
+  // Admin Routes (only if enabled)
   ADMIN: '/admin',
   ADMIN_USERS: '/admin/users',
   ADMIN_HOSPITALS: '/admin/hospitals',
@@ -311,7 +485,7 @@ export function isAllowedFileType(type: string): boolean {
  * Check if file extension is allowed
  */
 export function isAllowedFileExtension(extension: string): boolean {
-  return APP_CONFIG.FILE_UPLOAD.ALLOWED_EXTENSIONS.includes(extension.toLowerCase() as any);
+  return APP_CONFIG.FILE_UPLOAD.ALLOWED_EXTENSIONS.includes(extension.toLowerCase());
 }
 
 /**
@@ -343,76 +517,31 @@ export function getMaxFileSize(): string {
 }
 
 /**
- * Check if running in development mode
+ * Check if feature is enabled
  */
-export function isDevelopment(): boolean {
-  return typeof window !== 'undefined' && window.location.hostname === 'localhost';
+export function isFeatureEnabled(feature: keyof typeof FEATURES): boolean {
+  return FEATURES[feature];
 }
 
 /**
- * Check if running in production mode
+ * Get environment info for debugging
  */
-export function isProduction(): boolean {
-  return !isDevelopment();
+export function getEnvironmentInfo() {
+  return {
+    environment: APP_CONFIG.ENVIRONMENT,
+    apiBaseUrl: APP_CONFIG.API_BASE_URL,
+    isDevelopment: isDevelopment(),
+    isProduction: isProduction(),
+    features: FEATURES,
+    ...(isDevelopment() && {
+      browserInfo: browser ? {
+        hostname: window.location.hostname,
+        protocol: window.location.protocol,
+        userAgent: navigator.userAgent,
+      } : null,
+    }),
+  };
 }
-
-/**
- * Get environment variable with fallback
- */
-export function getEnv(key: string, fallback: string = ''): string {
-  // In browser environment, we don't have access to process.env
-  // Use window.location or other browser APIs to determine environment
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    if (key === 'NODE_ENV') {
-      return hostname === 'localhost' ? 'development' : 'production';
-    }
-  }
-  return fallback;
-}
-
-/**
- * Get API base URL (can be overridden by environment)
- */
-export function getApiBaseUrl(): string {
-  // In development, use localhost
-  if (isDevelopment()) {
-    return 'http://localhost:3000/api';
-  }
-  // In production, use relative path or configured URL
-  return '/api';
-}
-
-// ============================================
-// FEATURE FLAGS
-// ============================================
-
-export const FEATURES = {
-  // Core Features
-  AUTHENTICATION: true,
-  PATIENT_MANAGEMENT: true,
-  REPORTING: true,
-  
-  // Admin Features
-  USER_MANAGEMENT: true,
-  HOSPITAL_MANAGEMENT: true,
-  DISEASE_MANAGEMENT: true,
-  
-  // Advanced Features
-  EXCEL_EXPORT: true,
-  PDF_EXPORT: true,
-  CHART_VISUALIZATION: true,
-  ADVANCED_SEARCH: true,
-  
-  // Experimental Features
-  DARK_MODE: false,
-  PUSH_NOTIFICATIONS: false,
-  OFFLINE_MODE: false,
-  
-  // Development Features
-  DEBUG_MODE: typeof window !== 'undefined' && window.location.hostname === 'localhost',
-  MOCK_DATA: typeof window !== 'undefined' && window.location.hostname === 'localhost',
-} as const;
 
 // ============================================
 // TYPE EXPORTS
@@ -422,14 +551,8 @@ export type AppConfig = typeof APP_CONFIG;
 export type ApiEndpoints = typeof API_ENDPOINTS;
 export type Routes = typeof ROUTES;
 export type Features = typeof FEATURES;
-
-// Environment type
 export type Environment = 'development' | 'production' | 'test';
-
-// Theme type
 export type Theme = 'light' | 'dark';
-
-// Language type
 export type Language = 'th' | 'en';
 
 // Export config object for easier imports
