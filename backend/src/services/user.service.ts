@@ -19,6 +19,34 @@ import type {
 
 export class UserService {
   // ============================================
+  // PRIVATE HELPER METHODS
+  // ============================================
+
+  /**
+   * Map userRoleId to UserRoleEnum
+   */
+  private static getUserRoleFromId(roleId: number): UserRoleEnum {
+    const roleMap: Record<number, UserRoleEnum> = {
+      1: UserRoleEnum.SUPERADMIN,
+      2: UserRoleEnum.ADMIN,
+      3: UserRoleEnum.USER,
+    };
+
+    const role = roleMap[roleId];
+    if (!role) {
+      throw new Error('Role ID ไม่ถูกต้อง');
+    }
+    return role;
+  }
+
+  /**
+   * Hash password using consistent salt rounds from config
+   */
+  private static async hashPassword(password: string): Promise<string> {
+    return await bcrypt.hash(password, config.security.bcryptRounds);
+  }
+
+  // ============================================
   // CREATE USER
   // ============================================
   
@@ -39,70 +67,63 @@ export class UserService {
       hospitalCode9eDigit: string;
     } | null;
   }> {
-    // Check if username already exists
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        username: data.username,
-        isActive: true,
-      },
-    });
-
-    if (existingUser) {
-      throw new Error('ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว');
-    }
-
-    // Check if hospital exists (if provided)
-    if (data.hospitalCode9eDigit) {
-      const hospital = await prisma.hospital.findFirst({
+    // Use transaction to ensure data consistency
+    return await prisma.$transaction(async (tx) => {
+      // Check if username already exists
+      const existingUser = await tx.user.findFirst({
         where: {
-          hospitalCode9eDigit: data.hospitalCode9eDigit,
+          username: data.username,
           isActive: true,
         },
       });
 
-      if (!hospital) {
-        throw new Error('ไม่พบโรงพยาบาลที่ระบุ');
+      if (existingUser) {
+        throw new Error('ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว');
       }
-    }
 
-    // Hash password
-    const saltRounds = 12;
-    const hashedPassword = await bcrypt.hash(data.password, saltRounds);
+      // Check if hospital exists (if provided)
+      if (data.hospitalCode9eDigit) {
+        const hospital = await tx.hospital.findFirst({
+          where: {
+            hospitalCode9eDigit: data.hospitalCode9eDigit,
+            isActive: true,
+          },
+        });
 
-    // Map userRoleId to UserRoleEnum
-    const userRoleMap: Record<number, UserRoleEnum> = {
-      1: UserRoleEnum.SUPERADMIN,
-      2: UserRoleEnum.ADMIN,
-      3: UserRoleEnum.USER,
-    };
+        if (!hospital) {
+          throw new Error('ไม่พบโรงพยาบาลที่ระบุ');
+        }
+      }
 
-    const userRole = userRoleMap[data.userRoleId];
-    if (!userRole) {
-      throw new Error('Role ID ไม่ถูกต้อง');
-    }
+      // Hash password using consistent method
+      const hashedPassword = await this.hashPassword(data.password);
 
-    // Create user
-    const newUser = await prisma.user.create({
-      data: {
-        username: data.username,
-        password: hashedPassword,
-        name: data.name,
-        userRole,
-        userRoleId: data.userRoleId,
-        hospitalCode9eDigit: data.hospitalCode9eDigit || null,
-      },
-      include: {
-        hospital: {
-          select: {
-            id: true,
-            hospitalName: true,
-            hospitalCode9eDigit: true,
+      // Get user role from roleId
+      const userRole = this.getUserRoleFromId(data.userRoleId);
+
+      // Create user
+      const newUser = await tx.user.create({
+        data: {
+          username: data.username,
+          password: hashedPassword,
+          name: data.name,
+          userRole,
+          userRoleId: data.userRoleId,
+          hospitalCode9eDigit: data.hospitalCode9eDigit || null,
+        },
+        include: {
+          hospital: {
+            select: {
+              id: true,
+              hospitalName: true,
+              hospitalCode9eDigit: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    return newUser;
+      return newUser;
+    });
   }
 
   // ============================================
@@ -139,57 +160,55 @@ export class UserService {
       hasPrevious: boolean;
     };
   }> {
-    const page = queryParams.page || 1;
-    const limit = Math.min(queryParams.limit || 20, 100); // Max 100 items per page
+    const {
+      page = config.constants.pagination.defaultPage,
+      limit = config.constants.pagination.defaultLimit,
+      search,
+      userRoleId,
+      hospitalCode9eDigit,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      isActive = true,
+    } = queryParams;
+
+    // Calculate pagination
     const skip = (page - 1) * limit;
 
-    // Build where clause
+    // Build where conditions
     const where: any = {
-      isActive: queryParams.isActive !== undefined ? queryParams.isActive : true,
+      isActive,
     };
 
     // Permission-based filtering
     if (currentUser.userRoleId === config.constants.roleIds.ADMIN) {
       // Admin can only see Users (roleId: 3)
       where.userRoleId = config.constants.roleIds.USER;
-    } else if (currentUser.userRoleId === config.constants.roleIds.USER) {
-      // User can only see themselves
-      throw new Error('ไม่มีสิทธิ์ดูรายการผู้ใช้งาน');
+      // Admin can only see users from their hospital
+      if (currentUser.hospitalCode9eDigit) {
+        where.hospitalCode9eDigit = currentUser.hospitalCode9eDigit;
+      }
     }
 
-    // Search filter
-    if (queryParams.search) {
+    // Apply filters
+    if (search) {
       where.OR = [
-        { username: { contains: queryParams.search, mode: 'insensitive' } },
-        { name: { contains: queryParams.search, mode: 'insensitive' } },
+        { username: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, mode: 'insensitive' } },
       ];
     }
 
-    // Role filter
-    if (queryParams.userRoleId) {
-      where.userRoleId = queryParams.userRoleId;
+    if (userRoleId) {
+      where.userRoleId = userRoleId;
     }
 
-    // Hospital filter
-    if (queryParams.hospitalCode9eDigit) {
-      where.hospitalCode9eDigit = queryParams.hospitalCode9eDigit;
-    }
-
-    // Build orderBy
-    const orderBy: any = {};
-    if (queryParams.sortBy) {
-      orderBy[queryParams.sortBy] = queryParams.sortOrder || 'asc';
-    } else {
-      orderBy.createdAt = 'desc'; // Default sort
+    if (hospitalCode9eDigit) {
+      where.hospitalCode9eDigit = hospitalCode9eDigit;
     }
 
     // Execute queries
     const [users, total] = await Promise.all([
       prisma.user.findMany({
         where,
-        skip,
-        take: limit,
-        orderBy,
         include: {
           hospital: {
             select: {
@@ -199,11 +218,16 @@ export class UserService {
             },
           },
         },
+        orderBy: {
+          [sortBy]: sortOrder,
+        },
+        skip,
+        take: limit,
       }),
       prisma.user.count({ where }),
     ]);
 
-    // Calculate pagination
+    // Calculate pagination metadata
     const totalPages = Math.ceil(total / limit);
     const hasNext = page < totalPages;
     const hasPrevious = page > 1;
@@ -227,7 +251,7 @@ export class UserService {
   
   static async getUserById(
     userId: string,
-    currentUser: { userRoleId: number; id: string }
+    currentUser: { userRoleId: number; id?: string }
   ): Promise<{
     id: string;
     username: string;
@@ -306,96 +330,90 @@ export class UserService {
       hospitalCode9eDigit: string;
     } | null;
   }> {
-    // Check if user exists
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        id: userId,
-        isActive: true,
-      },
-    });
-
-    if (!existingUser) {
-      throw new Error('ไม่พบผู้ใช้งานที่ระบุ');
-    }
-
-    // Permission check
-    if (currentUser.userRoleId === config.constants.roleIds.ADMIN) {
-      // Admin can only update Users (roleId: 3)
-      if (existingUser.userRoleId <= config.constants.roleIds.ADMIN) {
-        throw new Error('ไม่สามารถแก้ไขข้อมูลผู้ดูแลระบบได้');
-      }
-    } else if (currentUser.userRoleId === config.constants.roleIds.USER) {
-      throw new Error('ไม่มีสิทธิ์แก้ไขข้อมูลผู้ใช้งาน');
-    }
-
-    // Check username uniqueness (if changing)
-    if (data.username && data.username !== existingUser.username) {
-      const duplicateUser = await prisma.user.findFirst({
+    // Use transaction to ensure data consistency
+    return await prisma.$transaction(async (tx) => {
+      // Check if user exists
+      const existingUser = await tx.user.findFirst({
         where: {
-          username: data.username,
-          isActive: true,
-          id: { not: userId },
-        },
-      });
-
-      if (duplicateUser) {
-        throw new Error('ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว');
-      }
-    }
-
-    // Check hospital exists (if provided)
-    if (data.hospitalCode9eDigit) {
-      const hospital = await prisma.hospital.findFirst({
-        where: {
-          hospitalCode9eDigit: data.hospitalCode9eDigit,
+          id: userId,
           isActive: true,
         },
       });
 
-      if (!hospital) {
-        throw new Error('ไม่พบโรงพยาบาลที่ระบุ');
+      if (!existingUser) {
+        throw new Error('ไม่พบผู้ใช้งานที่ระบุ');
       }
-    }
 
-    // Map userRoleId to UserRoleEnum (if changing role)
-    let userRole: UserRoleEnum | undefined;
-    if (data.userRoleId) {
-      const userRoleMap: Record<number, UserRoleEnum> = {
-        1: UserRoleEnum.SUPERADMIN,
-        2: UserRoleEnum.ADMIN,
-        3: UserRoleEnum.USER,
-      };
-
-      userRole = userRoleMap[data.userRoleId];
-      if (!userRole) {
-        throw new Error('Role ID ไม่ถูกต้อง');
+      // Permission check
+      if (currentUser.userRoleId === config.constants.roleIds.ADMIN) {
+        // Admin can only update Users (roleId: 3)
+        if (existingUser.userRoleId <= config.constants.roleIds.ADMIN) {
+          throw new Error('ไม่สามารถแก้ไขข้อมูลผู้ดูแลระบบได้');
+        }
+      } else if (currentUser.userRoleId === config.constants.roleIds.USER) {
+        throw new Error('ไม่มีสิทธิ์แก้ไขข้อมูลผู้ใช้งาน');
       }
-    }
 
-    // Update user
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        ...(data.username && { username: data.username }),
-        ...(data.name && { name: data.name }),
-        ...(userRole && { userRole }),
-        ...(data.userRoleId && { userRoleId: data.userRoleId }),
-        ...(data.hospitalCode9eDigit !== undefined && { 
-          hospitalCode9eDigit: data.hospitalCode9eDigit || null 
-        }),
-      },
-      include: {
-        hospital: {
-          select: {
-            id: true,
-            hospitalName: true,
-            hospitalCode9eDigit: true,
+      // Check username uniqueness (if changing)
+      if (data.username && data.username !== existingUser.username) {
+        const duplicateUser = await tx.user.findFirst({
+          where: {
+            username: data.username,
+            isActive: true,
+            id: { not: userId },
+          },
+        });
+
+        if (duplicateUser) {
+          throw new Error('ชื่อผู้ใช้นี้มีอยู่ในระบบแล้ว');
+        }
+      }
+
+      // Check hospital exists (if provided)
+      if (data.hospitalCode9eDigit) {
+        const hospital = await tx.hospital.findFirst({
+          where: {
+            hospitalCode9eDigit: data.hospitalCode9eDigit,
+            isActive: true,
+          },
+        });
+
+        if (!hospital) {
+          throw new Error('ไม่พบโรงพยาบาลที่ระบุ');
+        }
+      }
+
+      // Get user role from roleId (if changing role)
+      let userRole: UserRoleEnum | undefined;
+      if (data.userRoleId) {
+        userRole = this.getUserRoleFromId(data.userRoleId);
+      }
+
+      // Update user
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: {
+          ...(data.username && { username: data.username }),
+          ...(data.name && { name: data.name }),
+          ...(userRole && { userRole }),
+          ...(data.userRoleId && { userRoleId: data.userRoleId }),
+          ...(data.hospitalCode9eDigit !== undefined && { 
+            hospitalCode9eDigit: data.hospitalCode9eDigit || null 
+          }),
+        },
+        include: {
+          hospital: {
+            select: {
+              id: true,
+              hospitalName: true,
+              hospitalCode9eDigit: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    return updatedUser;
+      return updatedUser;
+    });
   }
 
   // ============================================
@@ -523,9 +541,14 @@ export class UserService {
       throw new Error('รหัสผ่านปัจจุบันไม่ถูกต้อง');
     }
 
-    // Hash new password
-    const saltRounds = 12;
-    const hashedNewPassword = await bcrypt.hash(data.newPassword, saltRounds);
+    // Check if new password is same as current password
+    const isSamePassword = await bcrypt.compare(data.newPassword, user.password);
+    if (isSamePassword) {
+      throw new Error('รหัสผ่านใหม่ต้องแตกต่างจากรหัสผ่านปัจจุบัน');
+    }
+
+    // Hash new password using consistent method
+    const hashedNewPassword = await this.hashPassword(data.newPassword);
 
     // Update password
     const changedAt = new Date();
@@ -571,9 +594,8 @@ export class UserService {
       throw new Error('ไม่มีสิทธิ์เปลี่ยนรหัสผ่านผู้ใช้งานอื่น');
     }
 
-    // Hash new password
-    const saltRounds = 12;
-    const hashedNewPassword = await bcrypt.hash(data.newPassword, saltRounds);
+    // Hash new password using consistent method
+    const hashedNewPassword = await this.hashPassword(data.newPassword);
 
     // Update password
     const changedAt = new Date();
