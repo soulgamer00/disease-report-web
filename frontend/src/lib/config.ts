@@ -1,95 +1,61 @@
 // frontend/src/lib/config.ts
-// Single source of truth for all frontend configuration
-// Uses SvelteKit environment variables properly
+// Complete configuration file for Disease Report System Frontend v2
+// ✅ Fixed REPORTS endpoints to match backend routes exactly
+// ✅ Removed non-existent endpoints, added missing /reports/occupation
 
 import { browser } from '$app/environment';
 import { env } from '$env/dynamic/public';
 
 // ============================================
-// ENVIRONMENT DETECTION
+// ENVIRONMENT HELPERS
 // ============================================
-
-/**
- * Get current environment based on NODE_ENV or URL
- */
-function getEnvironment(): 'development' | 'production' | 'test' {
-  // In SvelteKit, check PUBLIC_NODE_ENV first
-  if (env.PUBLIC_NODE_ENV) {
-    return env.PUBLIC_NODE_ENV as 'development' | 'production' | 'test';
-  }
-  
-  // Browser-based detection as fallback
-  if (browser) {
-    const hostname = window.location.hostname;
-    const protocol = window.location.protocol;
-    
-    // Development indicators
-    if (hostname === 'localhost' || 
-        hostname === '127.0.0.1' || 
-        hostname.endsWith('.local') ||
-        protocol === 'http:') {
-      return 'development';
-    }
-    
-    // Production by default
-    return 'production';
-  }
-  
-  // Server-side default
-  return 'development';
-}
-
-/**
- * Get API base URL based on environment
- */
-function getApiBaseUrl(): string {
-  // Use explicit environment variable if provided
-  if (env.PUBLIC_API_BASE_URL) {
-    return env.PUBLIC_API_BASE_URL;
-  }
-  
-  const environment = getEnvironment();
-  
-  switch (environment) {
-    case 'development':
-      // Local development - use localhost:3000
-      return 'http://localhost:3000/api';
-      
-    case 'production':
-      // Production - use relative path (assumes frontend and backend on same domain)
-      // or can be overridden by PUBLIC_API_BASE_URL
-      return '/api';
-      
-    case 'test':
-      // Test environment
-      return 'http://localhost:3001/api';
-      
-    default:
-      return '/api';
-  }
-}
 
 /**
  * Check if running in development mode
  */
 export function isDevelopment(): boolean {
-  return getEnvironment() === 'development';
+  return env.PUBLIC_NODE_ENV === 'development' || (!env.PUBLIC_NODE_ENV && browser && window.location.hostname === 'localhost');
 }
 
 /**
  * Check if running in production mode
  */
 export function isProduction(): boolean {
-  return getEnvironment() === 'production';
+  return env.PUBLIC_NODE_ENV === 'production';
+}
+
+/**
+ * Get API base URL based on environment
+ */
+function getApiBaseUrl(): string {
+  // Explicit environment variable takes precedence
+  if (env.PUBLIC_API_BASE_URL) {
+    return env.PUBLIC_API_BASE_URL;
+  }
+  
+  // Auto-detect based on current environment
+  if (browser) {
+    // Client-side: Use current origin with /api path
+    const { protocol, hostname, port } = window.location;
+    const portSuffix = port && port !== '80' && port !== '443' ? `:${port}` : '';
+    return `${protocol}//${hostname}${portSuffix}/api`;
+  }
+  
+  // Server-side: Use environment-specific defaults
+  if (isDevelopment()) {
+    return env.PUBLIC_DEV_API_URL || 'http://localhost:8000/api';
+  }
+  
+  return env.PUBLIC_PROD_API_URL || 'https://api.disease-report.com/api';
 }
 
 // ============================================
-// MAIN CONFIGURATION
+// APPLICATION CONFIGURATION
 // ============================================
 
 export const APP_CONFIG = {
   // Environment
-  ENVIRONMENT: getEnvironment(),
+  ENVIRONMENT: (env.PUBLIC_NODE_ENV as 'development' | 'production' | 'test') || 'development',
   
   // API Configuration
   API_BASE_URL: getApiBaseUrl(),
@@ -165,62 +131,39 @@ export const APP_CONFIG = {
       PURPLE: '#8B5CF6',
       PINK: '#EC4899',
       INDIGO: '#6366F1',
-    } as const,
-    DEFAULT_HEIGHT: parseInt(env.PUBLIC_CHART_DEFAULT_HEIGHT || '300', 10),
-    ANIMATION_DURATION: parseInt(env.PUBLIC_CHART_ANIMATION_DURATION || '1000', 10),
-  },
-  
-  // Table Configuration
-  TABLE: {
-    DEFAULT_PAGE_SIZE: parseInt(env.PUBLIC_DEFAULT_PAGE_SIZE || '20', 10),
-    ROWS_PER_PAGE_OPTIONS: [10, 20, 50, 100] as const,
-    MAX_ROWS_PER_PAGE: parseInt(env.PUBLIC_MAX_PAGE_SIZE || '100', 10),
-    STICKY_HEADER: (env.PUBLIC_STICKY_TABLE_HEADER || 'true') === 'true',
-  },
-  
-  // Form Configuration
-  FORM: {
-    DEBOUNCE_DELAY: parseInt(env.PUBLIC_FORM_DEBOUNCE_DELAY || '300', 10),
-    AUTO_SAVE_DELAY: parseInt(env.PUBLIC_FORM_AUTO_SAVE_DELAY || '2000', 10),
-    VALIDATION_DELAY: parseInt(env.PUBLIC_FORM_VALIDATION_DELAY || '500', 10),
-    MAX_TEXT_LENGTH: parseInt(env.PUBLIC_MAX_TEXT_LENGTH || '255', 10),
-    MAX_TEXTAREA_LENGTH: parseInt(env.PUBLIC_MAX_TEXTAREA_LENGTH || '1000', 10),
-  },
-  
-  // Cache Configuration
-  CACHE: {
-    ENABLED: (env.PUBLIC_ENABLE_CACHE || 'true') === 'true',
-    DEFAULT_TTL: parseInt(env.PUBLIC_CACHE_TTL || '300000', 10), // 5 minutes
-    MAX_ENTRIES: parseInt(env.PUBLIC_CACHE_MAX_ENTRIES || '100', 10),
-    STORAGE_KEY: env.PUBLIC_CACHE_STORAGE_KEY || 'app_cache',
+    },
+    DEFAULT_HEIGHT: 400,
+    ANIMATION_DURATION: 500,
+    RESPONSIVE: true,
   },
   
   // Performance Configuration
   PERFORMANCE: {
     REQUEST_TIMEOUT: parseInt(env.PUBLIC_REQUEST_TIMEOUT || '30000', 10), // 30 seconds
+    DEBOUNCE_DELAY: parseInt(env.PUBLIC_DEBOUNCE_DELAY || '300', 10), // 300ms
+    VIRTUAL_SCROLL_THRESHOLD: parseInt(env.PUBLIC_VIRTUAL_SCROLL_THRESHOLD || '100', 10),
+    IMAGE_LAZY_LOAD: true,
+    ENABLE_SERVICE_WORKER: (env.PUBLIC_ENABLE_SERVICE_WORKER || 'false') === 'true',
+  },
+  
+  // Error Handling
+  ERROR_HANDLING: {
+    SHOW_STACK_TRACE: isDevelopment(),
     RETRY_ATTEMPTS: parseInt(env.PUBLIC_RETRY_ATTEMPTS || '3', 10),
-    RETRY_DELAY: parseInt(env.PUBLIC_RETRY_DELAY || '1000', 10),
+    RETRY_DELAY: parseInt(env.PUBLIC_RETRY_DELAY || '1000', 10), // 1 second
+    LOG_ERRORS: true,
+    REPORT_ERRORS: isProduction(),
   },
 } as const;
 
 // ============================================
-// FEATURE FLAGS (Environment-based)
+// FEATURE FLAGS
 // ============================================
 
 export const FEATURES = {
-  // Core Features
-  AUTHENTICATION: true,
-  PATIENT_MANAGEMENT: true,
-  REPORTING: true,
-  
-  // Admin Features
-  USER_MANAGEMENT: (env.PUBLIC_ENABLE_USER_MANAGEMENT || 'true') === 'true',
-  HOSPITAL_MANAGEMENT: (env.PUBLIC_ENABLE_HOSPITAL_MANAGEMENT || 'true') === 'true',
-  DISEASE_MANAGEMENT: (env.PUBLIC_ENABLE_DISEASE_MANAGEMENT || 'true') === 'true',
-  
-  // Advanced Features
+  // Data Features
   EXCEL_EXPORT: (env.PUBLIC_ENABLE_EXCEL_EXPORT || 'true') === 'true',
-  PDF_EXPORT: (env.PUBLIC_ENABLE_PDF_EXPORT || 'false') === 'true',
+  BULK_OPERATIONS: (env.PUBLIC_ENABLE_BULK_OPERATIONS || 'true') === 'true',
   CHART_VISUALIZATION: (env.PUBLIC_ENABLE_CHARTS || 'true') === 'true',
   ADVANCED_SEARCH: (env.PUBLIC_ENABLE_ADVANCED_SEARCH || 'true') === 'true',
   
@@ -375,29 +318,22 @@ export const API_ENDPOINTS = {
     HEALTH: '/users/health',
   },
   
-  // Report Endpoints
+  // Report Endpoints (✅ FIXED - ตรงกับ backend routes)
   REPORTS: {
-    // Age & Demographics
+    // Age & Demographics Reports
     AGE_GROUPS: '/reports/age-groups',
-    GENDER_RATIO: '/reports/gender-ratio',
+    GENDER_RATIO: '/reports/gender-ratio', 
     OCCUPATION: '/reports/occupation',
     
     // Incidence & Statistics
     INCIDENCE_RATES: '/reports/incidence-rates',
     
-    // Support Data
+    // Support Data for Dropdowns
     DISEASES: '/reports/diseases',
     HOSPITALS: '/reports/hospitals',
     PUBLIC_STATS: '/reports/public-stats',
     
-    // Additional Reports (from backend routes)
-    PATIENT_VISIT_DATA: '/reports/patient-visit-data',
-    INCIDENCE_DATA: '/reports/incidence-data',
-    GENDER_DATA: '/reports/gender-data',
-    TREND_DATA: '/reports/trend-data',
-    POPULATION_DATA: '/reports/population-data',
-    FILTER_OPTIONS: '/reports/filter-options',
-    
+    // Documentation & Health
     DOCS: '/reports/docs',
     HEALTH: '/reports/health',
   },

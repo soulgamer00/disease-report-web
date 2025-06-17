@@ -1,6 +1,7 @@
 // frontend/src/lib/api.ts
 // Complete API client for Disease Report System Frontend v2
 // Type-safe, error-handled, feature-complete API wrapper
+// ✅ Fixed REPORTS API to match backend routes exactly
 // ✅ Uses exact types from frontend/src/lib/types/backend.ts
 
 import { browser } from '$app/environment';
@@ -58,10 +59,6 @@ import type {
   PatientVisitStatisticsResponse,
   DiseasesListResponse,
   DiseaseDetailResponse,
-  ReportPatientVisitDataResponse,
-  ReportIncidenceDataResponse,
-  ReportGenderDataResponse,
-  ReportTrendDataResponse,
   
 } from '$lib/types/backend';
 
@@ -83,132 +80,102 @@ export class ApiError extends Error {
     this.data = data;
     this.timestamp = new Date();
   }
-
-  get isAuthError(): boolean {
-    return this.status === 401;
-  }
-
-  get isPermissionError(): boolean {
-    return this.status === 403;
-  }
-
-  get isValidationError(): boolean {
-    return this.status === 400 && Boolean(this.data && 'details' in this.data);
-  }
-
-  get isNetworkError(): boolean {
-    return this.status === 0 || this.status >= 500;
-  }
-
-  get validationErrors(): Array<{ field: string; message: string }> {
-    if (this.isValidationError && this.data && 'details' in this.data) {
-      return (this.data.details as Array<{ field: string; message: string }>) || [];
-    }
-    return [];
-  }
 }
 
 // ============================================
 // RETRY CONFIGURATION
 // ============================================
 
-interface RetryConfig {
+export interface RetryConfig {
   attempts: number;
   delay: number;
   backoff: boolean;
+  retryOn: number[];
 }
 
-const DEFAULT_RETRY_CONFIG: RetryConfig = {
-  attempts: APP_CONFIG.PERFORMANCE.RETRY_ATTEMPTS,
-  delay: APP_CONFIG.PERFORMANCE.RETRY_DELAY,
+const defaultRetryConfig: RetryConfig = {
+  attempts: APP_CONFIG.ERROR_HANDLING.RETRY_ATTEMPTS,
+  delay: APP_CONFIG.ERROR_HANDLING.RETRY_DELAY,
   backoff: true,
+  retryOn: [408, 429, 500, 502, 503, 504],
 };
 
 // ============================================
-// REQUEST INTERCEPTORS
+// INTERCEPTORS
 // ============================================
 
-interface RequestInterceptor {
-  (config: RequestInit): RequestInit | Promise<RequestInit>;
-}
-
-interface ResponseInterceptor {
-  onFulfilled?: (response: Response) => Response | Promise<Response>;
-  onRejected?: (error: ApiError) => Promise<never> | ApiError;
-}
+export type RequestInterceptor = (config: RequestInit) => Promise<RequestInit> | RequestInit;
+export type ResponseInterceptor = (response: Response) => Promise<Response> | Response;
 
 class ApiClient {
   private requestInterceptors: RequestInterceptor[] = [];
   private responseInterceptors: ResponseInterceptor[] = [];
 
-  addRequestInterceptor(interceptor: RequestInterceptor): void {
+  public addRequestInterceptor(interceptor: RequestInterceptor): void {
     this.requestInterceptors.push(interceptor);
   }
 
-  addResponseInterceptor(interceptor: ResponseInterceptor): void {
+  public addResponseInterceptor(interceptor: ResponseInterceptor): void {
     this.responseInterceptors.push(interceptor);
   }
 
   private async applyRequestInterceptors(config: RequestInit): Promise<RequestInit> {
     let finalConfig = config;
-    
     for (const interceptor of this.requestInterceptors) {
       finalConfig = await interceptor(finalConfig);
     }
-    
     return finalConfig;
   }
 
   private async applyResponseInterceptors(response: Response): Promise<Response> {
     let finalResponse = response;
-    
     for (const interceptor of this.responseInterceptors) {
-      if (interceptor.onFulfilled) {
-        finalResponse = await interceptor.onFulfilled(finalResponse);
-      }
+      finalResponse = await interceptor(finalResponse);
     }
-    
     return finalResponse;
   }
 
   private async applyErrorInterceptors(error: ApiError): Promise<ApiError> {
-    let finalError = error;
-    
-    for (const interceptor of this.responseInterceptors) {
-      if (interceptor.onRejected) {
-        try {
-          await interceptor.onRejected(finalError);
-        } catch (interceptedError) {
-          finalError = interceptedError instanceof ApiError ? interceptedError : finalError;
-        }
-      }
+    // Custom error handling based on status
+    if (error.status === 401) {
+      this.handleAuthError();
     }
-    
-    return finalError;
+    return error;
+  }
+
+  private handleAuthError(): void {
+    if (browser) {
+      localStorage.removeItem(APP_CONFIG.AUTH.TOKEN_KEY);
+      localStorage.removeItem(APP_CONFIG.AUTH.REFRESH_TOKEN_KEY);
+      localStorage.removeItem(APP_CONFIG.AUTH.USER_KEY);
+      goto('/login');
+    }
   }
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async fetch<T>(
+  public async fetch<T>(
     endpoint: string,
     options: RequestInit = {},
     retryConfig: Partial<RetryConfig> = {}
   ): Promise<T> {
-    const config = { ...DEFAULT_RETRY_CONFIG, ...retryConfig };
-    let lastError: ApiError | undefined;
+    const config = { ...defaultRetryConfig, ...retryConfig };
+    let lastError: ApiError | null = null;
 
     for (let attempt = 1; attempt <= config.attempts; attempt++) {
       try {
         const result = await this.singleFetch<T>(endpoint, options);
         return result;
       } catch (error) {
-        lastError = error instanceof ApiError ? error : new ApiError(
-          error instanceof Error ? error.message : 'Unknown error',
-          0,
-          'Network Error'
-        );
+        lastError = error instanceof ApiError 
+          ? error 
+          : new ApiError(
+              error instanceof Error ? error.message : 'Unknown error',
+              0,
+              'Network Error'
+            );
 
         if (lastError.status >= 400 && lastError.status < 500 && lastError.status !== 429) {
           break;
@@ -313,85 +280,41 @@ class ApiClient {
       );
     }
   }
-
-  private handleAuthError(): void {
-    if (browser) {
-      localStorage.removeItem('user');
-      sessionStorage.removeItem('user');
-      
-      const currentPath = window.location.pathname + window.location.search;
-      const redirectUrl = `/login?redirect=${encodeURIComponent(currentPath)}`;
-      
-      goto(redirectUrl);
-    }
-  }
 }
 
 // Create singleton instance
 const apiClient = new ApiClient();
 
 // ============================================
-// SETUP DEFAULT INTERCEPTORS
-// ============================================
-
-apiClient.addRequestInterceptor((config) => {
-  return config;
-});
-
-apiClient.addResponseInterceptor({
-  onRejected: async (error: ApiError) => {
-    if (!APP_CONFIG.ENVIRONMENT || APP_CONFIG.ENVIRONMENT === 'development') {
-      console.error('API Error:', {
-        message: error.message,
-        status: error.status,
-        endpoint: error.data,
-        timestamp: error.timestamp,
-      });
-    }
-    
-    throw error;
-  }
-});
-
-// ============================================
-// CONVENIENCE FUNCTIONS
+// HTTP METHOD HELPERS
 // ============================================
 
 function buildQueryString(params: Record<string, unknown>): string {
   const searchParams = new URLSearchParams();
-  
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {
       searchParams.set(key, value.toString());
     }
   });
-  
   return searchParams.toString();
 }
 
-async function get<T>(endpoint: string, params?: Record<string, unknown>): Promise<T> {
-  const query = params ? buildQueryString(params) : '';
-  const url = query ? `${endpoint}?${query}` : endpoint;
-  return apiClient.fetch<T>(url, { method: 'GET' });
+async function get<T>(endpoint: string, params: Record<string, unknown> = {}): Promise<T> {
+  const query = buildQueryString(params);
+  const fullEndpoint = `${endpoint}${query ? `?${query}` : ''}`;
+  return apiClient.fetch<T>(fullEndpoint, { method: 'GET' });
 }
 
-async function post<T>(endpoint: string, data?: unknown): Promise<T> {
+async function post<T>(endpoint: string, data?: Record<string, unknown> | LoginRequest | ChangePasswordRequest): Promise<T> {
   return apiClient.fetch<T>(endpoint, {
     method: 'POST',
     body: data ? JSON.stringify(data) : undefined,
   });
 }
 
-async function put<T>(endpoint: string, data?: unknown): Promise<T> {
+async function put<T>(endpoint: string, data?: Record<string, unknown> | ChangePasswordRequest): Promise<T> {
   return apiClient.fetch<T>(endpoint, {
     method: 'PUT',
-    body: data ? JSON.stringify(data) : undefined,
-  });
-}
-
-async function patch<T>(endpoint: string, data?: unknown): Promise<T> {
-  return apiClient.fetch<T>(endpoint, {
-    method: 'PATCH',
     body: data ? JSON.stringify(data) : undefined,
   });
 }
@@ -413,6 +336,10 @@ const authAPI = {
     return post<AuthLogoutResponse>(API_ENDPOINTS.AUTH.LOGOUT);
   },
 
+  async refreshToken(): Promise<RefreshTokenResponse> {
+    return post<RefreshTokenResponse>(API_ENDPOINTS.AUTH.REFRESH);
+  },
+
   async getProfile(): Promise<AuthProfileResponse> {
     return get<AuthProfileResponse>(API_ENDPOINTS.AUTH.PROFILE);
   },
@@ -423,10 +350,6 @@ const authAPI = {
 
   async changePassword(data: ChangePasswordRequest): Promise<AuthChangePasswordResponse> {
     return post<AuthChangePasswordResponse>(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, data);
-  },
-
-  async refresh(): Promise<BaseResponse<RefreshTokenResponse>> {
-    return post<BaseResponse<RefreshTokenResponse>>(API_ENDPOINTS.AUTH.REFRESH);
   },
 
   async getHealth(): Promise<BaseResponse<{ status: string; timestamp: string }>> {
@@ -573,8 +496,8 @@ const diseasesAPI = {
 // ============================================
 
 const symptomsAPI = {
-  async getList(params: Record<string, unknown> = {}): Promise<BaseResponse<{ symptoms: unknown[] }>> {
-    return get<BaseResponse<{ symptoms: unknown[] }>>(API_ENDPOINTS.SYMPTOMS.LIST, params);
+  async getList(params: Record<string, unknown> = {}): Promise<BaseResponse<{ symptoms: unknown[]; pagination: unknown }>> {
+    return get<BaseResponse<{ symptoms: unknown[]; pagination: unknown }>>(API_ENDPOINTS.SYMPTOMS.LIST, params);
   },
 
   async getById(id: string): Promise<BaseResponse<{ symptom: unknown }>> {
@@ -611,8 +534,8 @@ const symptomsAPI = {
 // ============================================
 
 const hospitalsAPI = {
-  async getList(params: Record<string, unknown> = {}): Promise<BaseResponse<{ hospitals: Hospital[] }>> {
-    return get<BaseResponse<{ hospitals: Hospital[] }>>(API_ENDPOINTS.HOSPITALS.LIST, params);
+  async getList(params: Record<string, unknown> = {}): Promise<BaseResponse<{ hospitals: Hospital[]; pagination: unknown }>> {
+    return get<BaseResponse<{ hospitals: Hospital[]; pagination: unknown }>>(API_ENDPOINTS.HOSPITALS.LIST, params);
   },
 
   async getById(id: string): Promise<BaseResponse<{ hospital: Hospital }>> {
@@ -653,8 +576,8 @@ const hospitalsAPI = {
 // ============================================
 
 const populationsAPI = {
-  async getList(params: Record<string, unknown> = {}): Promise<BaseResponse<{ populations: unknown[] }>> {
-    return get<BaseResponse<{ populations: unknown[] }>>(API_ENDPOINTS.POPULATIONS.LIST, params);
+  async getList(params: Record<string, unknown> = {}): Promise<BaseResponse<{ populations: unknown[]; pagination: unknown }>> {
+    return get<BaseResponse<{ populations: unknown[]; pagination: unknown }>>(API_ENDPOINTS.POPULATIONS.LIST, params);
   },
 
   async getById(id: string): Promise<BaseResponse<{ population: unknown }>> {
@@ -673,8 +596,8 @@ const populationsAPI = {
     return get<BaseResponse<Record<string, unknown>>>(API_ENDPOINTS.POPULATIONS.STATISTICS);
   },
 
-  async getTrends(): Promise<BaseResponse<Record<string, unknown>>> {
-    return get<BaseResponse<Record<string, unknown>>>(API_ENDPOINTS.POPULATIONS.TRENDS);
+  async getTrends(): Promise<BaseResponse<{ trends: unknown[] }>> {
+    return get<BaseResponse<{ trends: unknown[] }>>(API_ENDPOINTS.POPULATIONS.TRENDS);
   },
 
   async getMyHospital(): Promise<BaseResponse<{ populations: unknown[] }>> {
@@ -699,12 +622,12 @@ const populationsAPI = {
 };
 
 // ============================================
-// USERS API (Admin+ only)
+// USERS API
 // ============================================
 
 const usersAPI = {
-  async getList(params: Record<string, unknown> = {}): Promise<BaseResponse<{ users: UserInfo[]; pagination: any }>> {
-    return get<BaseResponse<{ users: UserInfo[]; pagination: any }>>(API_ENDPOINTS.USERS.LIST, params);
+  async getList(params: Record<string, unknown> = {}): Promise<BaseResponse<{ users: UserInfo[]; pagination: unknown }>> {
+    return get<BaseResponse<{ users: UserInfo[]; pagination: unknown }>>(API_ENDPOINTS.USERS.LIST, params);
   },
 
   async getById(id: string): Promise<BaseResponse<{ user: UserInfo }>> {
@@ -753,28 +676,31 @@ const usersAPI = {
 };
 
 // ============================================
-// REPORTS API
+// REPORTS API (✅ FIXED - ตรงกับ backend routes)
 // ============================================
 
 const reportsAPI = {
-  async getAgeGroups(params: Record<string, unknown>): Promise<BaseResponse<Record<string, unknown>>> {
+  // Age & Demographics Reports
+  async getAgeGroups(params: Record<string, unknown> = {}): Promise<BaseResponse<Record<string, unknown>>> {
     return get<BaseResponse<Record<string, unknown>>>(API_ENDPOINTS.REPORTS.AGE_GROUPS, params);
   },
 
-  async getGenderRatio(params: Record<string, unknown>): Promise<BaseResponse<Record<string, unknown>>> {
+  async getGenderRatio(params: Record<string, unknown> = {}): Promise<BaseResponse<Record<string, unknown>>> {
     return get<BaseResponse<Record<string, unknown>>>(API_ENDPOINTS.REPORTS.GENDER_RATIO, params);
   },
 
-  async getOccupation(params: Record<string, unknown>): Promise<BaseResponse<Record<string, unknown>>> {
+  async getOccupation(params: Record<string, unknown> = {}): Promise<BaseResponse<Record<string, unknown>>> {
     return get<BaseResponse<Record<string, unknown>>>(API_ENDPOINTS.REPORTS.OCCUPATION, params);
   },
 
-  async getIncidenceRates(params: Record<string, unknown>): Promise<BaseResponse<Record<string, unknown>>> {
+  // Incidence & Statistics
+  async getIncidenceRates(params: Record<string, unknown> = {}): Promise<BaseResponse<Record<string, unknown>>> {
     return get<BaseResponse<Record<string, unknown>>>(API_ENDPOINTS.REPORTS.INCIDENCE_RATES, params);
   },
 
-  async getDiseases(): Promise<DiseasesListResponse> {
-    return get<DiseasesListResponse>(API_ENDPOINTS.REPORTS.DISEASES);
+  // Support Data for Dropdowns
+  async getDiseases(): Promise<BaseResponse<{ diseases: Disease[] }>> {
+    return get<BaseResponse<{ diseases: Disease[] }>>(API_ENDPOINTS.REPORTS.DISEASES);
   },
 
   async getHospitals(): Promise<BaseResponse<{ hospitals: Hospital[] }>> {
@@ -785,30 +711,7 @@ const reportsAPI = {
     return get<BaseResponse<Record<string, unknown>>>(API_ENDPOINTS.REPORTS.PUBLIC_STATS);
   },
 
-  async getPatientVisitData(params: Record<string, unknown> = {}): Promise<ReportPatientVisitDataResponse> {
-    return get<ReportPatientVisitDataResponse>(API_ENDPOINTS.REPORTS.PATIENT_VISIT_DATA, params);
-  },
-
-  async getIncidenceData(params: Record<string, unknown> = {}): Promise<ReportIncidenceDataResponse> {
-    return get<ReportIncidenceDataResponse>(API_ENDPOINTS.REPORTS.INCIDENCE_DATA, params);
-  },
-
-  async getGenderData(params: Record<string, unknown> = {}): Promise<ReportGenderDataResponse> {
-    return get<ReportGenderDataResponse>(API_ENDPOINTS.REPORTS.GENDER_DATA, params);
-  },
-
-  async getTrendData(params: Record<string, unknown> = {}): Promise<ReportTrendDataResponse> {
-    return get<ReportTrendDataResponse>(API_ENDPOINTS.REPORTS.TREND_DATA, params);
-  },
-
-  async getPopulationData(params: Record<string, unknown> = {}): Promise<BaseResponse<Record<string, unknown>>> {
-    return get<BaseResponse<Record<string, unknown>>>(API_ENDPOINTS.REPORTS.POPULATION_DATA, params);
-  },
-
-  async getFilterOptions(): Promise<BaseResponse<Record<string, unknown>>> {
-    return get<BaseResponse<Record<string, unknown>>>(API_ENDPOINTS.REPORTS.FILTER_OPTIONS);
-  },
-
+  // Documentation & Health
   async getDocs(): Promise<BaseResponse<Record<string, unknown>>> {
     return get<BaseResponse<Record<string, unknown>>>(API_ENDPOINTS.REPORTS.DOCS);
   },
@@ -828,6 +731,7 @@ interface HealthCheckResponse {
   uptime: number;
   version?: string;
   environment?: string;
+  services?: Record<string, string>;
 }
 
 const healthAPI = {
@@ -835,7 +739,7 @@ const healthAPI = {
     return get<BaseResponse<HealthCheckResponse>>(API_ENDPOINTS.HEALTH);
   },
 
-  async getApiInfo(): Promise<BaseResponse<Record<string, unknown>>> {
+  async getApiRoot(): Promise<BaseResponse<Record<string, unknown>>> {
     return get<BaseResponse<Record<string, unknown>>>(API_ENDPOINTS.ROOT);
   },
 };
@@ -844,115 +748,42 @@ const healthAPI = {
 // UTILITY FUNCTIONS
 // ============================================
 
-export function downloadBlob(blob: Blob, filename: string): void {
+function downloadBlob(blob: Blob, filename: string): void {
   if (!browser) return;
-
+  
   const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
   window.URL.revokeObjectURL(url);
 }
 
-export function handleApiError(error: unknown): string {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
+function handleApiError(error: unknown): { message: string; type: 'error' } {
+  console.error('API Error:', error);
   
-  if (error instanceof Error) {
-    return error.message;
-  }
-  
-  return 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ';
-}
-
-export function isAuthError(error: unknown): boolean {
-  return error instanceof ApiError && error.isAuthError;
-}
-
-export function isPermissionError(error: unknown): boolean {
-  return error instanceof ApiError && error.isPermissionError;
-}
-
-export function isValidationError(error: unknown): boolean {
-  return error instanceof ApiError && error.isValidationError;
-}
-
-export function isNetworkError(error: unknown): boolean {
-  return error instanceof ApiError && error.isNetworkError;
-}
-
-export function getValidationErrors(error: unknown): Array<{ field: string; message: string }> {
-  if (error instanceof ApiError && error.isValidationError) {
-    return error.validationErrors;
-  }
-  return [];
-}
-
-export function formatApiError(error: unknown): {
-  title: string;
-  message: string;
-  type: 'error' | 'warning' | 'info';
-  details?: Array<{ field: string; message: string }>;
-} {
   if (error instanceof ApiError) {
-    if (error.isAuthError) {
-      return {
-        title: 'Authentication Required',
-        message: 'กรุณาเข้าสู่ระบบเพื่อใช้งาน',
-        type: 'warning'
-      };
-    }
-
-    if (error.isPermissionError) {
-      return {
-        title: 'Access Denied',
-        message: 'ไม่มีสิทธิ์ในการดำเนินการนี้',
-        type: 'warning'
-      };
-    }
-
-    if (error.isValidationError) {
-      return {
-        title: 'Validation Error',
-        message: 'ข้อมูลที่กรอกไม่ถูกต้อง',
-        type: 'error',
-        details: error.validationErrors
-      };
-    }
-
-    if (error.isNetworkError) {
-      return {
-        title: 'Network Error',
-        message: 'เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง',
-        type: 'error'
-      };
-    }
-
     return {
-      title: 'API Error',
       message: error.message,
       type: 'error'
     };
   }
-
+  
   return {
-    title: 'Unknown Error',
     message: error instanceof Error ? error.message : 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ',
     type: 'error'
   };
 }
 
-export function createAbortController(timeoutMs: number = APP_CONFIG.PERFORMANCE.REQUEST_TIMEOUT): AbortController {
+function createAbortController(timeoutMs: number = APP_CONFIG.PERFORMANCE.REQUEST_TIMEOUT): AbortController {
   const controller = new AbortController();
   setTimeout(() => controller.abort(), timeoutMs);
   return controller;
 }
 
-export async function exportToExcel(
+async function exportToExcel(
   apiCall: () => Promise<Blob>,
   filename: string = `export_${new Date().getTime()}.xlsx`
 ): Promise<void> {
@@ -973,18 +804,7 @@ export async function exportToExcel(
 // EXPORTS
 // ============================================
 
-export default {
-  auth: authAPI,
-  patientVisits: patientVisitsAPI,
-  diseases: diseasesAPI,
-  symptoms: symptomsAPI,
-  hospitals: hospitalsAPI,
-  populations: populationsAPI,
-  users: usersAPI,
-  reports: reportsAPI,
-  health: healthAPI,
-};
-
+// Named exports
 export {
   authAPI,
   patientVisitsAPI,
@@ -996,6 +816,21 @@ export {
   reportsAPI,
   healthAPI,
   apiClient,
+  downloadBlob,
+  handleApiError,
+  createAbortController,
+  exportToExcel,
 };
 
-export type { RequestInterceptor, ResponseInterceptor, RetryConfig };
+// Default export
+export default {
+  auth: authAPI,
+  patientVisits: patientVisitsAPI,
+  diseases: diseasesAPI,
+  symptoms: symptomsAPI,
+  hospitals: hospitalsAPI,
+  populations: populationsAPI,
+  users: usersAPI,
+  reports: reportsAPI,
+  health: healthAPI,
+};
