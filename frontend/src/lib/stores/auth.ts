@@ -4,7 +4,7 @@
 import { writable, derived, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
-import { authAPI } from '$lib/api';
+import { authAPI, ApiError } from '$lib/api';
 import type { UserInfo, LoginRequest } from '$lib/types/backend';
 
 // ============================================
@@ -165,9 +165,16 @@ const createAuthStore = () => {
         setError('เข้าสู่ระบบไม่สำเร็จ');
         return false;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
-      const errorMessage = error?.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ';
+      
+      let errorMessage = 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ';
+      if (error instanceof ApiError) {
+        errorMessage = error.message;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
       setError(errorMessage);
       return false;
     } finally {
@@ -217,11 +224,11 @@ const createAuthStore = () => {
         setUser(null);
         return false;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.warn('Auth verification failed:', error);
       
       // If it's an auth error, clear the state
-      if (error?.status === 401) {
+      if (error instanceof ApiError && error.status === 401) {
         setUser(null);
         return false;
       }
@@ -332,7 +339,7 @@ export const hasRole = (requiredRole: 'USER' | 'ADMIN' | 'SUPERADMIN'): boolean 
     'USER': 1,
     'ADMIN': 2,
     'SUPERADMIN': 3,
-  };
+  } as const;
   
   const userLevel = roleHierarchy[currentUser.userRole];
   const requiredLevel = roleHierarchy[requiredRole];

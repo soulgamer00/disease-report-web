@@ -236,6 +236,18 @@
     onRemove?.();
   }
 
+  function handleKeydown(event: KeyboardEvent): void {
+    if (disabled) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      const mouseEvent = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true
+      });
+      handleClick(mouseEvent);
+    }
+  }
+
   // ============================================
   // COMPUTED PROPERTIES
   // ============================================
@@ -255,15 +267,15 @@
     {target}
     class={badgeClasses()}
     onclick={handleClick}
-    role="badge"
+    aria-label={typeof children === 'undefined' && displayCount() ? `Badge with count ${displayCount()}` : undefined}
   >
     <!-- Dot Only -->
     {#if dot && !showContent}
-      <div class={dotClasses()}></div>
+      <div class={dotClasses()} aria-hidden="true"></div>
     {:else}
       <!-- Left Icon -->
       {#if leftIcon}
-        <div class={sizeClasses().iconSize}>
+        <div class={sizeClasses().iconSize} aria-hidden="true">
           {@render leftIcon()}
         </div>
       {/if}
@@ -277,41 +289,51 @@
 
       <!-- Right Icon -->
       {#if rightIcon}
-        <div class={sizeClasses().iconSize}>
+        <div class={sizeClasses().iconSize} aria-hidden="true">
           {@render rightIcon()}
         </div>
       {/if}
 
       <!-- Remove Button -->
       {#if removable}
-        <button
-          type="button"
-          class="ml-1 inline-flex items-center justify-center {sizeClasses().iconSize} rounded-full hover:bg-black hover:bg-opacity-20 focus:outline-none focus:bg-black focus:bg-opacity-20"
+        <span
+          class="ml-1 inline-flex items-center justify-center {sizeClasses().iconSize} rounded-full hover:bg-black hover:bg-opacity-20 focus:outline-none focus:bg-black focus:bg-opacity-20 cursor-pointer"
           onclick={handleRemove}
+          onkeydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              handleRemove(new MouseEvent('click'));
+            }
+          }}
+          role="button"
+          tabindex="0"
           aria-label="ลบ"
         >
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
-        </button>
+        </span>
       {/if}
     {/if}
   </a>
-{:else}
-  <!-- Render as Span/Button -->
-  <span
+{:else if clickable}
+  <!-- Render as clickable button -->
+  <button
+    type="button"
     class={badgeClasses()}
-    onclick={clickable ? handleClick : undefined}
-    role="badge"
-    tabindex={clickable ? 0 : undefined}
+    onclick={handleClick}
+    onkeydown={handleKeydown}
+    {disabled}
+    aria-label={typeof children === 'undefined' && displayCount() ? `Badge with count ${displayCount()}` : undefined}
   >
     <!-- Dot Only -->
     {#if dot && !showContent}
-      <div class={dotClasses()}></div>
+      <div class={dotClasses()} aria-hidden="true"></div>
     {:else}
       <!-- Left Icon -->
       {#if leftIcon}
-        <div class={sizeClasses().iconSize}>
+        <div class={sizeClasses().iconSize} aria-hidden="true">
           {@render leftIcon()}
         </div>
       {/if}
@@ -325,61 +347,86 @@
 
       <!-- Right Icon -->
       {#if rightIcon}
-        <div class={sizeClasses().iconSize}>
+        <div class={sizeClasses().iconSize} aria-hidden="true">
           {@render rightIcon()}
         </div>
       {/if}
 
       <!-- Remove Button -->
       {#if removable}
-        <button
-          type="button"
-          class="ml-1 inline-flex items-center justify-center {sizeClasses().iconSize} rounded-full hover:bg-black hover:bg-opacity-20 focus:outline-none focus:bg-black focus:bg-opacity-20"
+        <span
+          class="ml-1 inline-flex items-center justify-center {sizeClasses().iconSize} rounded-full hover:bg-black hover:bg-opacity-20 focus:outline-none focus:bg-black focus:bg-opacity-20 cursor-pointer"
           onclick={handleRemove}
+          onkeydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              handleRemove(new MouseEvent('click'));
+            }
+          }}
+          role="button"
+          tabindex="0"
           aria-label="ลบ"
         >
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
-        </button>
+        </span>
+      {/if}
+    {/if}
+  </button>
+{:else}
+  <!-- Render as static span -->
+  <span
+    class={badgeClasses()}
+    aria-label={typeof children === 'undefined' && displayCount() ? `Badge with count ${displayCount()}` : undefined}
+  >
+    <!-- Dot Only -->
+    {#if dot && !showContent}
+      <div class={dotClasses()} aria-hidden="true"></div>
+    {:else}
+      <!-- Left Icon -->
+      {#if leftIcon}
+        <div class={sizeClasses().iconSize} aria-hidden="true">
+          {@render leftIcon()}
+        </div>
+      {/if}
+
+      <!-- Content -->
+      {#if children}
+        {@render children()}
+      {:else if displayCount()}
+        {displayCount()}
+      {/if}
+
+      <!-- Right Icon -->
+      {#if rightIcon}
+        <div class={sizeClasses().iconSize} aria-hidden="true">
+          {@render rightIcon()}
+        </div>
+      {/if}
+
+      <!-- Remove Button -->
+      {#if removable}
+        <span
+          class="ml-1 inline-flex items-center justify-center {sizeClasses().iconSize} rounded-full hover:bg-black hover:bg-opacity-20 focus:outline-none focus:bg-black focus:bg-opacity-20 cursor-pointer"
+          onclick={handleRemove}
+          onkeydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              handleRemove(new MouseEvent('click'));
+            }
+          }}
+          role="button"
+          tabindex="0"
+          aria-label="ลบ"
+        >
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </span>
       {/if}
     {/if}
   </span>
 {/if}
-
-<!-- ============================================ -->
-<!-- STYLES -->
-<!-- ============================================ -->
-
-<style>
-  /* Pulse animation */
-  @keyframes pulse {
-    0%, 100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.5;
-    }
-  }
-  
-  .animate-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-  
-  /* Hover effects */
-  span[onclick]:hover, a:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  
-  /* Focus effects */
-  span:focus, a:focus {
-    outline: 2px solid transparent;
-    outline-offset: 2px;
-  }
-  
-  /* Remove button hover */
-  button:hover {
-    transform: scale(1.1);
-  }
-</style>

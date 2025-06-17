@@ -1,6 +1,8 @@
 // frontend/src/lib/stores/index.ts
 // Central export for all Svelte stores
 
+import type { ComponentType } from 'svelte';
+
 // ============================================
 // AUTHENTICATION STORES
 // ============================================
@@ -199,8 +201,8 @@ export const toastStore = createToastStore();
 // Modal store
 interface Modal {
   id: string;
-  component: any;
-  props?: Record<string, any>;
+  component: ComponentType;
+  props?: Record<string, unknown>;
   options?: {
     closable?: boolean;
     backdrop?: boolean;
@@ -213,7 +215,11 @@ const createModalStore = () => {
   
   return {
     subscribe,
-    open: (component: any, props?: Record<string, any>, options?: Modal['options']) => {
+    open: (
+      component: ComponentType, 
+      props?: Record<string, unknown>, 
+      options?: Modal['options']
+    ) => {
       const modal: Modal = {
         id: Math.random().toString(36).substr(2, 9),
         component,
@@ -229,7 +235,7 @@ const createModalStore = () => {
       return modal.id;
     },
     close: () => set(null),
-    update: (props: Record<string, any>) => {
+    update: (props: Record<string, unknown>) => {
       update(modal => modal ? { ...modal, props: { ...modal.props, ...props } } : null);
     },
   };
@@ -297,7 +303,10 @@ export const formStore = createFormStore();
 export const createPersistedStore = <T>(
   key: string,
   initialValue: T,
-  serializer = JSON
+  serializer: {
+    parse: (text: string) => T;
+    stringify: (value: T) => string;
+  } = JSON
 ) => {
   let storedValue = initialValue;
   
@@ -353,7 +362,8 @@ export const createPersistedStore = <T>(
  */
 export const createDebouncedStore = <T>(initialValue: T, delay: number = 300) => {
   const { subscribe, set } = writable<T>(initialValue);
-let timeout: ReturnType<typeof setTimeout>;  
+  let timeout: ReturnType<typeof setTimeout>;
+  
   return {
     subscribe,
     set: (value: T) => {

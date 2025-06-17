@@ -23,6 +23,22 @@ interface SanitizationResult {
   threats: string[];
 }
 
+// Extend Request interface to include user information
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    username: string;
+    userRoleId: number;
+    hospitalCode9eDigit: string | null;
+  };
+}
+
+// Type for sanitized query parameters
+type SanitizedQuery = Record<string, string | string[] | undefined>;
+
+// Type for sanitized params
+type SanitizedParams = Record<string, string>;
+
 // ============================================
 // SANITIZATION CONFIGURATION
 // ============================================
@@ -231,7 +247,7 @@ const sanitizeValue = (
       );
     }
 
-    if (typeof val === 'object') {
+    if (typeof val === 'object' && val !== null) {
       const sanitizedObj: Record<string, unknown> = {};
       
       for (const [key, objValue] of Object.entries(val as Record<string, unknown>)) {
@@ -268,7 +284,7 @@ const sanitizeValue = (
 export const sanitizeInput = (options: Partial<SanitizationOptions> = {}) => {
   const config: SanitizationOptions = { ...defaultOptions, ...options };
 
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  return async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const startTime = Date.now();
       let totalThreats: string[] = [];
@@ -286,7 +302,7 @@ export const sanitizeInput = (options: Partial<SanitizationOptions> = {}) => {
       // Sanitize query parameters
       if (req.query && Object.keys(req.query).length > 0) {
         const queryResult = sanitizeValue(req.query, config, 'query');
-        req.query = queryResult.value as Record<string, string | string[] | undefined>;
+        req.query = queryResult.value as SanitizedQuery;
         
         if (queryResult.wasModified) hasModifications = true;
         totalThreats.push(...queryResult.threats);
@@ -295,7 +311,7 @@ export const sanitizeInput = (options: Partial<SanitizationOptions> = {}) => {
       // Sanitize URL parameters
       if (req.params && Object.keys(req.params).length > 0) {
         const paramsResult = sanitizeValue(req.params, config, 'params');
-        req.params = paramsResult.value as Record<string, string>;
+        req.params = paramsResult.value as SanitizedParams;
         
         if (paramsResult.wasModified) hasModifications = true;
         totalThreats.push(...paramsResult.threats);
@@ -309,13 +325,13 @@ export const sanitizeInput = (options: Partial<SanitizationOptions> = {}) => {
       if (config.logSuspiciousActivity && uniqueThreats.length > 0) {
         await logger.security(
           `Potential security threats detected and sanitized`,
-          req.ip,
+          req.ip || 'unknown',
           {
             threats: uniqueThreats,
             url: req.originalUrl,
             method: req.method,
             userAgent: req.get('User-Agent'),
-            userId: (req as any).user?.id,
+            userId: req.user?.id,
             hasModifications,
             processingTime,
           }

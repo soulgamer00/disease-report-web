@@ -1,7 +1,7 @@
 // frontend/src/lib/api.ts
 // Complete API client for Disease Report System Frontend
 
-import { buildApiUrl, API_ENDPOINTS } from '$lib/config';
+import { getApiBaseUrl, API_ENDPOINTS } from '$lib/config';
 import type {
   // Base Types
   BaseResponse,
@@ -64,15 +64,26 @@ import type {
 export class ApiError extends Error {
   public status: number;
   public statusText: string;
-  public data?: any;
+  public data?: ErrorResponse | Record<string, unknown>;
 
-  constructor(message: string, status: number, statusText: string, data?: any) {
+  constructor(message: string, status: number, statusText: string, data?: ErrorResponse | Record<string, unknown>) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.statusText = statusText;
     this.data = data;
   }
+}
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Build full API URL from endpoint
+ */
+function buildApiUrl(endpoint: string): string {
+  return `${getApiBaseUrl()}${endpoint}`;
 }
 
 // ============================================
@@ -121,7 +132,7 @@ async function apiFetch<T>(
 
     // Handle other HTTP errors
     if (!response.ok) {
-      let errorData: any;
+      let errorData: ErrorResponse | Record<string, unknown>;
       try {
         errorData = await response.json();
       } catch {
@@ -129,7 +140,7 @@ async function apiFetch<T>(
       }
       
       throw new ApiError(
-        errorData.message || `HTTP ${response.status}`,
+        (errorData as ErrorResponse).message || `HTTP ${response.status}`,
         response.status,
         response.statusText,
         errorData
@@ -151,7 +162,7 @@ async function apiFetch<T>(
     // Handle network errors
     console.error(`API Error (${endpoint}):`, error);
     throw new ApiError(
-      error instanceof Error ? error.message : 'Network error occurred',
+      error instanceof Error ? error.message : 'Unknown error occurred',
       0,
       'Network Error'
     );
@@ -164,7 +175,7 @@ async function apiFetch<T>(
 
 const authAPI = {
   /**
-   * User login - sets httpOnly cookies automatically
+   * Login user with username and password
    */
   async login(credentials: LoginRequest): Promise<AuthLoginResponse> {
     return apiFetch<AuthLoginResponse>(API_ENDPOINTS.AUTH.LOGIN, {
@@ -174,7 +185,7 @@ const authAPI = {
   },
 
   /**
-   * User logout - clears httpOnly cookies
+   * Logout current user
    */
   async logout(): Promise<AuthLogoutResponse> {
     return apiFetch<AuthLogoutResponse>(API_ENDPOINTS.AUTH.LOGOUT, {
@@ -190,32 +201,29 @@ const authAPI = {
   },
 
   /**
-   * Verify authentication status
+   * Verify current authentication status
    */
   async verify(): Promise<AuthVerifyResponse> {
     return apiFetch<AuthVerifyResponse>(API_ENDPOINTS.AUTH.VERIFY);
   },
 
   /**
-   * Change password
+   * Change current user password
    */
   async changePassword(data: ChangePasswordRequest): Promise<AuthChangePasswordResponse> {
     return apiFetch<AuthChangePasswordResponse>(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, {
-      method: 'POST',
+      method: 'PUT',
       body: JSON.stringify(data),
     });
   },
 
   /**
-   * Refresh access token
+   * Refresh authentication token
    */
-  async refresh(): Promise<BaseResponse<{ accessToken: string; refreshToken: string; expiresIn: string }>> {
-    return apiFetch<BaseResponse<{ accessToken: string; refreshToken: string; expiresIn: string }>>(
-      API_ENDPOINTS.AUTH.REFRESH,
-      {
-        method: 'POST',
-      }
-    );
+  async refresh(): Promise<AuthLoginResponse> {
+    return apiFetch<AuthLoginResponse>(API_ENDPOINTS.AUTH.REFRESH, {
+      method: 'POST',
+    });
   },
 };
 
@@ -225,12 +233,10 @@ const authAPI = {
 
 const patientVisitsAPI = {
   /**
-   * Get patient visits list with pagination and filtering
+   * Get paginated list of patient visits
    */
   async getList(params: PatientVisitQueryParams = {}): Promise<PatientVisitsListResponse> {
     const searchParams = new URLSearchParams();
-    
-    // Add all valid parameters to search params
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         searchParams.set(key, value.toString());
@@ -251,9 +257,9 @@ const patientVisitsAPI = {
   },
 
   /**
-   * Get patient visits by disease
+   * Get patient visit statistics
    */
-  async getByDisease(diseaseId: string, params: PatientVisitQueryParams = {}): Promise<PatientVisitsListResponse> {
+  async getStatistics(params: PatientVisitQueryParams = {}): Promise<PatientVisitStatisticsResponse> {
     const searchParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
@@ -262,48 +268,16 @@ const patientVisitsAPI = {
     });
 
     const query = searchParams.toString();
-    const endpoint = `${API_ENDPOINTS.PATIENT_VISITS.BY_DISEASE(diseaseId)}${query ? `?${query}` : ''}`;
+    const endpoint = `${API_ENDPOINTS.PATIENT_VISITS.STATISTICS}${query ? `?${query}` : ''}`;
 
-    return apiFetch<PatientVisitsListResponse>(endpoint);
+    return apiFetch<PatientVisitStatisticsResponse>(endpoint);
   },
 
   /**
-   * Get patient visits by hospital
+   * Create new patient visit
    */
-  async getByHospital(hospitalCode: string, params: PatientVisitQueryParams = {}): Promise<PatientVisitsListResponse> {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        searchParams.set(key, value.toString());
-      }
-    });
-
-    const query = searchParams.toString();
-    const endpoint = `${API_ENDPOINTS.PATIENT_VISITS.BY_HOSPITAL(hospitalCode)}${query ? `?${query}` : ''}`;
-
-    return apiFetch<PatientVisitsListResponse>(endpoint);
-  },
-
-  /**
-   * Get patient visit history by ID card
-   */
-  async getHistory(idCardCode: string): Promise<PatientVisitsListResponse> {
-    const endpoint = `${API_ENDPOINTS.PATIENT_VISITS.HISTORY}?idCardCode=${idCardCode}`;
-    return apiFetch<PatientVisitsListResponse>(endpoint);
-  },
-
-  /**
-   * Get patient visits statistics
-   */
-  async getStatistics(): Promise<PatientVisitStatisticsResponse> {
-    return apiFetch<PatientVisitStatisticsResponse>(API_ENDPOINTS.PATIENT_VISITS.STATISTICS);
-  },
-
-  /**
-   * Create new patient visit (Admin+)
-   */
-  async create(data: Partial<PatientVisitInfo>): Promise<BaseResponse<{ patientVisit: PatientVisitInfo }>> {
-    return apiFetch<BaseResponse<{ patientVisit: PatientVisitInfo }>>(
+  async create(data: Partial<PatientVisitInfo>): Promise<PatientVisitDetailResponse> {
+    return apiFetch<PatientVisitDetailResponse>(
       API_ENDPOINTS.PATIENT_VISITS.CREATE,
       {
         method: 'POST',
@@ -313,10 +287,10 @@ const patientVisitsAPI = {
   },
 
   /**
-   * Update patient visit (Admin+)
+   * Update existing patient visit
    */
-  async update(id: string, data: Partial<PatientVisitInfo>): Promise<BaseResponse<{ patientVisit: PatientVisitInfo }>> {
-    return apiFetch<BaseResponse<{ patientVisit: PatientVisitInfo }>>(
+  async update(id: string, data: Partial<PatientVisitInfo>): Promise<PatientVisitDetailResponse> {
+    return apiFetch<PatientVisitDetailResponse>(
       API_ENDPOINTS.PATIENT_VISITS.UPDATE(id),
       {
         method: 'PUT',
@@ -326,7 +300,7 @@ const patientVisitsAPI = {
   },
 
   /**
-   * Delete patient visit (Admin+)
+   * Delete patient visit
    */
   async delete(id: string): Promise<BaseResponse<{ deleted: boolean }>> {
     return apiFetch<BaseResponse<{ deleted: boolean }>>(
@@ -356,7 +330,7 @@ const patientVisitsAPI = {
     });
 
     if (!response.ok) {
-      throw new ApiError('Export failed', response.status, response.statusText);
+      throw new ApiError('Excel export failed', response.status, response.statusText);
     }
 
     return response.blob();
@@ -369,7 +343,7 @@ const patientVisitsAPI = {
 
 const diseasesAPI = {
   /**
-   * Get diseases list
+   * Get list of diseases
    */
   async getList(params: QueryParams = {}): Promise<DiseasesListResponse> {
     const searchParams = new URLSearchParams();
@@ -393,49 +367,18 @@ const diseasesAPI = {
   },
 
   /**
-   * Search diseases
+   * Search diseases by name
    */
-  async search(query: string): Promise<DiseasesListResponse> {
+  async search(query: string): Promise<BaseResponse<{ diseases: Disease[] }>> {
     const endpoint = `${API_ENDPOINTS.DISEASES.SEARCH}?q=${encodeURIComponent(query)}`;
-    return apiFetch<DiseasesListResponse>(endpoint);
+    return apiFetch<BaseResponse<{ diseases: Disease[] }>>(endpoint);
   },
 
   /**
-   * Create new disease (Superadmin only)
+   * Get all active diseases (for dropdowns)
    */
-  async create(data: Partial<Disease>): Promise<BaseResponse<{ disease: Disease }>> {
-    return apiFetch<BaseResponse<{ disease: Disease }>>(
-      API_ENDPOINTS.DISEASES.CREATE,
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }
-    );
-  },
-
-  /**
-   * Update disease (Superadmin only)
-   */
-  async update(id: string, data: Partial<Disease>): Promise<BaseResponse<{ disease: Disease }>> {
-    return apiFetch<BaseResponse<{ disease: Disease }>>(
-      API_ENDPOINTS.DISEASES.UPDATE(id),
-      {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      }
-    );
-  },
-
-  /**
-   * Delete disease (Superadmin only)
-   */
-  async delete(id: string): Promise<BaseResponse<{ deleted: boolean }>> {
-    return apiFetch<BaseResponse<{ deleted: boolean }>>(
-      API_ENDPOINTS.DISEASES.DELETE(id),
-      {
-        method: 'DELETE',
-      }
-    );
+  async getActive(): Promise<BaseResponse<{ diseases: Disease[] }>> {
+    return apiFetch<BaseResponse<{ diseases: Disease[] }>>(API_ENDPOINTS.DISEASES.LIST + '?isActive=true');
   },
 };
 
@@ -443,11 +386,20 @@ const diseasesAPI = {
 // HOSPITALS API
 // ============================================
 
+interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
 const hospitalsAPI = {
   /**
-   * Get hospitals list
+   * Get list of hospitals
    */
-  async getList(params: QueryParams = {}): Promise<BaseResponse<{ hospitals: Hospital[]; pagination: any }>> {
+  async getList(params: QueryParams = {}): Promise<BaseResponse<{ hospitals: Hospital[]; pagination: PaginationMeta }>> {
     const searchParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
@@ -458,7 +410,7 @@ const hospitalsAPI = {
     const query = searchParams.toString();
     const endpoint = `${API_ENDPOINTS.HOSPITALS.LIST}${query ? `?${query}` : ''}`;
 
-    return apiFetch<BaseResponse<{ hospitals: Hospital[]; pagination: any }>>(endpoint);
+    return apiFetch<BaseResponse<{ hospitals: Hospital[]; pagination: PaginationMeta }>>(endpoint);
   },
 
   /**
@@ -499,7 +451,7 @@ const usersAPI = {
   /**
    * Get users list (Admin+)
    */
-  async getList(params: QueryParams = {}): Promise<BaseResponse<{ users: UserInfo[]; pagination: any }>> {
+  async getList(params: QueryParams = {}): Promise<BaseResponse<{ users: UserInfo[]; pagination: PaginationMeta }>> {
     const searchParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
@@ -510,7 +462,7 @@ const usersAPI = {
     const query = searchParams.toString();
     const endpoint = `${API_ENDPOINTS.USERS.LIST}${query ? `?${query}` : ''}`;
 
-    return apiFetch<BaseResponse<{ users: UserInfo[]; pagination: any }>>(endpoint);
+    return apiFetch<BaseResponse<{ users: UserInfo[]; pagination: PaginationMeta }>>(endpoint);
   },
 
   /**
@@ -561,8 +513,8 @@ const usersAPI = {
   /**
    * Change user password (Admin+)
    */
-  async changePassword(id: string, data: { newPassword: string; confirmPassword: string }): Promise<BaseResponse<any>> {
-    return apiFetch<BaseResponse<any>>(
+  async changePassword(id: string, data: { newPassword: string; confirmPassword: string }): Promise<BaseResponse<{ updated: boolean }>> {
+    return apiFetch<BaseResponse<{ updated: boolean }>>(
       API_ENDPOINTS.USERS.CHANGE_PASSWORD(id),
       {
         method: 'PUT',
@@ -700,33 +652,41 @@ const reportsAPI = {
 // HEALTH CHECK API
 // ============================================
 
+interface HealthCheckResponse {
+  status: string;
+  timestamp: string;
+  uptime: number;
+  version?: string;
+  environment?: string;
+}
+
 const healthAPI = {
   /**
    * Get system health status
    */
-  async getSystemHealth(): Promise<BaseResponse<any>> {
-    return apiFetch<BaseResponse<any>>(API_ENDPOINTS.HEALTH);
+  async getSystemHealth(): Promise<BaseResponse<HealthCheckResponse>> {
+    return apiFetch<BaseResponse<HealthCheckResponse>>(API_ENDPOINTS.HEALTH);
   },
 
   /**
    * Get auth service health
    */
-  async getAuthHealth(): Promise<BaseResponse<any>> {
-    return apiFetch<BaseResponse<any>>(API_ENDPOINTS.AUTH.HEALTH);
+  async getAuthHealth(): Promise<BaseResponse<HealthCheckResponse>> {
+    return apiFetch<BaseResponse<HealthCheckResponse>>(API_ENDPOINTS.AUTH.HEALTH);
   },
 
   /**
    * Get patient visits service health
    */
-  async getPatientVisitsHealth(): Promise<BaseResponse<any>> {
-    return apiFetch<BaseResponse<any>>(API_ENDPOINTS.PATIENT_VISITS.HEALTH);
+  async getPatientVisitsHealth(): Promise<BaseResponse<HealthCheckResponse>> {
+    return apiFetch<BaseResponse<HealthCheckResponse>>(API_ENDPOINTS.PATIENT_VISITS.HEALTH);
   },
 
   /**
    * Get diseases service health
    */
-  async getDiseasesHealth(): Promise<BaseResponse<any>> {
-    return apiFetch<BaseResponse<any>>(API_ENDPOINTS.DISEASES.HEALTH);
+  async getDiseasesHealth(): Promise<BaseResponse<HealthCheckResponse>> {
+    return apiFetch<BaseResponse<HealthCheckResponse>>(API_ENDPOINTS.DISEASES.HEALTH);
   },
 };
 
@@ -751,7 +711,7 @@ export function downloadBlob(blob: Blob, filename: string): void {
 /**
  * Handle API errors consistently
  */
-export function handleApiError(error: any): string {
+export function handleApiError(error: unknown): string {
   if (error instanceof ApiError) {
     return error.message;
   }
@@ -766,14 +726,14 @@ export function handleApiError(error: any): string {
 /**
  * Check if error is authentication error
  */
-export function isAuthError(error: any): boolean {
+export function isAuthError(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
 }
 
 /**
  * Check if error is permission error
  */
-export function isPermissionError(error: any): boolean {
+export function isPermissionError(error: unknown): boolean {
   return error instanceof ApiError && error.status === 403;
 }
 

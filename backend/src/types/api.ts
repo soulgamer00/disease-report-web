@@ -35,13 +35,12 @@ export type {
   PatientVisitResponseTypes,
 } from '../schemas/patientVisit.schema';
 
-// Disease Types (from disease.schema.ts)
+// Disease Types (from disease.schema.ts) - import with alias to avoid conflict
 export type {
   CreateDiseaseRequest,
   UpdateDiseaseRequest,
   DiseaseQueryParams,
   DiseaseParam,
-  DiseaseInfo,
   DiseaseListResponse,
   DiseaseDetailResponse,
   DiseaseCreateUpdateResponse,
@@ -51,7 +50,10 @@ export type {
   DiseaseResponseTypes,
 } from '../schemas/disease.schema';
 
-// Symptom Types (from symptom.schema.ts) - แยก DiseaseParam ออกเพื่อไม่ให้ duplicate
+// Import DiseaseInfo with alias to avoid conflict with report schema
+export type { DiseaseInfo as DiseaseEntityInfo } from '../schemas/disease.schema';
+
+// Symptom Types (from symptom.schema.ts)
 export type {
   CreateSymptomRequest,
   UpdateSymptomRequest,
@@ -133,18 +135,27 @@ export type { UserInfo as UserDetails } from '../schemas/user.schema';
 // Import ChangePasswordRequest with alias to avoid conflict
 export type { ChangePasswordRequest as UserChangePasswordRequest } from '../schemas/user.schema';
 
-// Report Types (from report.schema.ts)
+// Report Types (from report.schema.ts) - ใช้เฉพาะ types ที่มีอยู่จริง
 export type {
-  BaseReportQuery,
-  IncidenceDataQuery,
-  GenderDataQuery,
-  TrendDataQuery,
-  PopulationDataQuery,
-  PatientVisitDataItem,
-  PopulationDataItem,
-  AggregatedCountData,
-  PatientVisitDataResponse,
-  PopulationDataResponse,
+  ReportFilters,
+  AgeGroupsReportRequest,
+  GenderRatioReportRequest,
+  IncidenceRatesReportRequest,
+  OccupationReportRequest,
+  DiseaseInfo, // This is the report-specific DiseaseInfo
+  AgeGroupData,
+  GenderRatioData,
+  HospitalStats,
+  OccupationData,
+  DiseaseItem,
+  HospitalItem,
+  AgeGroupsReportResponse,
+  GenderRatioResponse,
+  IncidenceRatesResponse,
+  OccupationReportResponse,
+  DiseasesListResponse,
+  HospitalsListResponse,
+  PublicStatsResponse,
   ReportErrorResponse,
   ReportRequestTypes,
   ReportResponseTypes,
@@ -198,8 +209,114 @@ export interface PatientVisitFilters extends DateRangeFilter, SearchFilter {
   isActive?: boolean;
 }
 
-// Service response wrapper (ใช้ any หรือ generic แทน)
-export interface PatientVisitListResult<T = any> {
+// Service response wrapper - use specific type instead of any
+export interface PatientVisitListResult<T = PatientVisitDataItem> {
   data: T[];
   pagination: PaginationMeta;
+}
+
+// Generic API response wrapper
+export interface ApiResponseWrapper<T> {
+  data: T;
+  pagination?: PaginationMeta;
+  meta?: Record<string, unknown>;
+}
+
+// ============================================
+// DEFINE MISSING TYPES (ที่ api.ts ต้องการแต่ไม่มีใน schemas)
+// ============================================
+
+// Base Report Query (ให้ตรงกับที่ frontend ต้องการ)
+export interface BaseReportQuery {
+  diseaseId?: string;
+  year?: string;
+  hospitalCode?: string;
+  gender?: 'MALE' | 'FEMALE' | 'all';
+  ageGroup?: string;
+  occupation?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+}
+
+// Incidence Data Query (extends BaseReportQuery)
+export interface IncidenceDataQuery extends BaseReportQuery {
+  groupBy?: 'disease' | 'hospital' | 'month';
+}
+
+// Gender Data Query (extends BaseReportQuery) 
+export interface GenderDataQuery extends BaseReportQuery {
+  ageGroup?: 'all' | 'children' | 'adults' | 'elderly';
+}
+
+// Trend Data Query (extends BaseReportQuery)
+export interface TrendDataQuery extends BaseReportQuery {
+  period?: 'daily' | 'weekly' | 'monthly' | 'yearly';
+}
+
+// Population Data Query (extends BaseReportQuery)
+export interface PopulationDataQuery extends BaseReportQuery {
+  includePopulation?: boolean;
+}
+
+// Patient Visit Data Item
+export interface PatientVisitDataItem {
+  id: string;
+  hn: string;
+  visitDate: Date;
+  diseaseId: string;
+  diseaseName: string;
+  hospitalCode: string;
+  hospitalName: string;
+  gender: 'MALE' | 'FEMALE';
+  age: number;
+  patientType: 'IPD' | 'OPD' | 'ACF';
+  patientCondition: 'UNKNOWN' | 'RECOVERED' | 'DIED' | 'UNDER_TREATMENT';
+}
+
+// Population Data Item
+export interface PopulationDataItem {
+  hospitalCode: string;
+  hospitalName: string;
+  year: number;
+  population: number;
+  ageGroup?: string;
+  gender?: 'MALE' | 'FEMALE' | 'ALL';
+}
+
+// Aggregated Count Data
+export interface AggregatedCountData {
+  group: string;
+  count: number;
+  rate?: number;
+  percentage?: number;
+}
+
+// Patient Visit Data Response
+export interface PatientVisitDataResponse {
+  success: boolean;
+  message: string;
+  data: {
+    visits: PatientVisitDataItem[];
+    pagination: PaginationMeta;
+    summary?: {
+      totalPatients: number;
+      totalVisits: number;
+    };
+  };
+}
+
+// Population Data Response
+export interface PopulationDataResponse {
+  success: boolean;
+  message: string;
+  data: {
+    populations: PopulationDataItem[];
+    summary: {
+      totalPopulation: number;
+      yearsCovered: number[];
+      hospitalsWithData: number;
+    };
+  };
 }
