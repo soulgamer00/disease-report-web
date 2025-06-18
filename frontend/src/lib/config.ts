@@ -43,7 +43,7 @@ function getApiBaseUrl(): string {
   
   // Server-side: Use environment-specific defaults
   if (isDevelopment()) {
-    return env.PUBLIC_DEV_API_URL || 'http://localhost:8000/api';
+    return env.PUBLIC_DEV_API_URL || 'http://localhost:3000/api';
   }
   
   return env.PUBLIC_PROD_API_URL || 'https://api.disease-report.com/api';

@@ -1,6 +1,7 @@
 // frontend/src/lib/types/backend.ts
 // Type definitions extracted from backend Zod schemas and Prisma enums
 // ✅ Single source of truth for frontend types
+// ✅ 100% match with backend schemas
 
 // ============================================
 // BASE TYPES
@@ -236,7 +237,7 @@ export const enumMappings = {
 } as const;
 
 // ============================================
-// AUTH TYPES
+// AUTH TYPES (100% match with backend schemas)
 // ============================================
 
 export interface LoginRequest {
@@ -258,35 +259,48 @@ export interface UserInfo {
   id: string;
   username: string;
   name: string;
-  userRoleId: number;
   userRole: UserRoleEnum;
+  userRoleId: number;
   hospitalCode9eDigit: string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-  lastLoginAt: string | null;
-  hospital?: {
+  hospital: {
     id: string;
     hospitalName: string;
     hospitalCode9eDigit: string;
   } | null;
+  lastLoginAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // Optional field for user management endpoints
+  isActive?: boolean;
 }
 
 export interface LoginResponse {
-  user: UserInfo;
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: string;
+  success: boolean;
+  message: string;
+  data: {
+    user: UserInfo;
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: string;
+  };
 }
 
 export interface ChangePasswordResponse {
-  updatedAt: string;
+  success: boolean;
+  message: string;
+  data: {
+    updatedAt: string;
+  };
 }
 
 export interface RefreshTokenResponse {
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: string;
+  success: boolean;
+  message: string;
+  data: {
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: string;
+  };
 }
 
 // ============================================
