@@ -230,7 +230,7 @@ export const addHospitalFilter = (req: Request, res: Response, next: NextFunctio
   }
 
   // Superadmin can see all data - no filter needed
-  if (req.user.userRoleId === config.constants.roleIds.SUPERADMIN) {
+if (req.user.userRoleId <= config.constants.roleIds.ADMIN) {
     next();
     return;
   }
