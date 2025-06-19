@@ -1,256 +1,194 @@
 <!-- frontend/src/lib/components/ui/ThemeToggle.svelte -->
-<!-- Theme toggle component with beautiful animations and proper TypeScript -->
+<!-- ✅ Fixed Theme Toggle Component -->
+<!-- Clean, working, and beautiful theme switcher -->
+
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { themeStore, type Theme } from '$lib/stores/theme.store';
-  
+  import { browser } from '$app/environment';
+  import { themeStore, getThemeIcon, getThemeDisplayName } from '$lib/stores/theme.store';
+  import type { Theme } from '$lib/stores/theme.store';
+
   // ============================================
   // PROPS
   // ============================================
   
   interface Props {
     size?: 'sm' | 'md' | 'lg';
-    showLabel?: boolean;
-    variant?: 'button' | 'dropdown' | 'icon';
     position?: 'left' | 'right';
-    className?: string;
+    showLabel?: boolean;
+    variant?: 'button' | 'dropdown';
   }
-  
+
   let {
     size = 'md',
-    showLabel = false,
-    variant = 'button',
     position = 'right',
-    className = ''
+    showLabel = false,
+    variant = 'dropdown'
   }: Props = $props();
-  
+
   // ============================================
   // STATE
   // ============================================
   
   let isOpen = $state(false);
-  let mounted = $state(false);
+  let buttonRef = $state<HTMLButtonElement>();
   
-  // Subscribe to theme store - properly typed
-  let themeState = $state({
-    theme: 'system' as Theme,
-    systemTheme: 'light' as 'light' | 'dark',
-    effectiveTheme: 'light' as 'light' | 'dark',
-    isLoading: false
+  // Theme state from store
+  let themeState = $state($themeStore);
+  
+  // Update when store changes
+  $effect(() => {
+    themeState = $themeStore;
   });
-  
+
   // ============================================
-  // LIFECYCLE
-  // ============================================
-  
-  onMount(() => {
-    mounted = true;
-    themeStore.initialize();
-    
-    // Subscribe to theme changes
-    const unsubscribe = themeStore.subscribe(state => {
-      themeState = state;
-    });
-    
-    return unsubscribe;
-  });
-  
-  // ============================================
-  // COMPUTED VALUES (using $derived with proper typing)
+  // COMPUTED VALUES
   // ============================================
   
-  let buttonSizeClasses = $derived.by(() => {
+  // Size classes
+  let sizeClasses = $derived.by(() => {
     switch (size) {
-      case 'sm':
-        return 'w-8 h-8 text-sm';
-      case 'lg':
-        return 'w-12 h-12 text-lg';
-      default:
-        return 'w-10 h-10 text-base';
+      case 'sm': return 'w-8 h-8 text-sm';
+      case 'lg': return 'w-12 h-12 text-lg';
+      default: return 'w-10 h-10 text-base';
     }
   });
   
-  let iconSizeClasses = $derived.by(() => {
-    switch (size) {
-      case 'sm':
-        return 'w-4 h-4';
-      case 'lg':
-        return 'w-6 h-6';
-      default:
-        return 'w-5 h-5';
-    }
-  });
-  
+  // Current theme icon
   let currentIcon = $derived.by(() => {
-    if (!mounted) return 'sun';
-    return themeState.effectiveTheme === 'dark' ? 'moon' : 'sun';
-  });
-  
-  let currentLabel = $derived.by(() => {
-    if (!mounted) return 'โหมดสว่าง';
-    
-    switch (themeState.theme) {
-      case 'light':
-        return 'โหมดสว่าง';
-      case 'dark':
-        return 'โหมดมืด';
-      case 'system':
-        return 'ตามระบบ';
-      default:
-        return 'ไม่ทราบ';
+    switch (themeState.effectiveTheme) {
+      case 'dark': return '🌙';
+      case 'light': return '☀️';
+      default: return '💻';
     }
   });
   
+  // Current theme display name
+  let currentDisplayName = $derived.by(() => {
+    return getThemeDisplayName(themeState.theme);
+  });
+
   // ============================================
   // HANDLERS
   // ============================================
   
-  function handleToggle() {
-    if (variant === 'dropdown') {
-      isOpen = !isOpen;
-    } else {
-      themeStore.toggleTheme();
-    }
+  function toggleDropdown() {
+    isOpen = !isOpen;
+  }
+  
+  function closeDropdown() {
+    isOpen = false;
   }
   
   function handleThemeSelect(theme: Theme) {
     themeStore.setTheme(theme);
-    isOpen = false;
+    closeDropdown();
+    
+    // Optional: Show feedback
+    console.log(`🎨 Theme changed to: ${theme}`);
   }
   
-  function handleClickOutside(event: Event) {
-    const target = event.target as Element;
-    const dropdown = document.getElementById('theme-dropdown');
-    const button = document.getElementById('theme-toggle-button');
-    
-    if (dropdown && !dropdown.contains(target) && !button?.contains(target)) {
-      isOpen = false;
+  function handleSimpleToggle() {
+    themeStore.toggle();
+    console.log(`🔄 Theme toggled to: ${themeState.effectiveTheme}`);
+  }
+  
+  // Click outside to close dropdown
+  function handleClickOutside(event: MouseEvent) {
+    if (!buttonRef?.contains(event.target as Node)) {
+      closeDropdown();
     }
   }
   
-  // ============================================
-  // EFFECTS
-  // ============================================
-  
+  // Setup click outside listener
   $effect(() => {
-    if (isOpen) {
+    if (browser && isOpen) {
       document.addEventListener('click', handleClickOutside);
       return () => {
         document.removeEventListener('click', handleClickOutside);
       };
     }
   });
+  
+  // Close dropdown on Escape key
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && isOpen) {
+      closeDropdown();
+      buttonRef?.focus();
+    }
+  }
+  
+  $effect(() => {
+    if (browser && isOpen) {
+      document.addEventListener('keydown', handleKeydown);
+      return () => {
+        document.removeEventListener('keydown', handleKeydown);
+      };
+    }
+  });
 </script>
 
 <!-- ============================================ -->
-<!-- BUTTON VARIANT -->
+<!-- SIMPLE BUTTON VARIANT -->
 <!-- ============================================ -->
 
 {#if variant === 'button'}
   <button
     type="button"
-    class="btn-ghost relative inline-flex items-center justify-center rounded-lg 
-           transition-all duration-200 hover:bg-surface-hover focus:outline-none 
-           focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 
-           {buttonSizeClasses} {className}"
-    onclick={handleToggle}
-    aria-label="เปลี่ยนธีม"
-    title={currentLabel}
+    class="theme-toggle-button {sizeClasses} 
+           inline-flex items-center justify-center
+           rounded-lg border border-primary
+           bg-surface text-primary
+           hover:bg-surface-hover active:bg-surface-active
+           transition-all duration-200 ease-in-out
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+    onclick={handleSimpleToggle}
+    title="สลับธีม (Ctrl+Shift+D)"
+    aria-label="สลับธีม"
   >
-    <!-- Sun Icon -->
-    <svg
-      class="absolute transition-all duration-300 transform 
-             {currentIcon === 'sun' ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'}
-             {iconSizeClasses}"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      stroke-width="2"
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-      />
-    </svg>
-    
-    <!-- Moon Icon -->
-    <svg
-      class="absolute transition-all duration-300 transform 
-             {currentIcon === 'moon' ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-0 opacity-0'}
-             {iconSizeClasses}"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      stroke-width="2"
-    >
-      <path
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-      />
-    </svg>
+    <span class="transition-transform duration-300 hover:scale-110">
+      {currentIcon}
+    </span>
     
     {#if showLabel}
-      <span class="ml-2 text-sm font-medium text-primary">
-        {currentLabel}
+      <span class="ml-2 text-sm font-medium">
+        {currentDisplayName}
       </span>
     {/if}
   </button>
-{/if}
 
 <!-- ============================================ -->
 <!-- DROPDOWN VARIANT -->
 <!-- ============================================ -->
 
-{#if variant === 'dropdown'}
-  <div class="relative">
-    <!-- Dropdown Toggle Button -->
+{:else}
+  <div class="theme-toggle-dropdown relative">
+    
+    <!-- Toggle Button -->
     <button
-      id="theme-toggle-button"
+      bind:this={buttonRef}
       type="button"
-      class="btn-ghost relative inline-flex items-center justify-center rounded-lg 
-             transition-all duration-200 hover:bg-surface-hover focus:outline-none 
-             focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 
-             {buttonSizeClasses} {className}"
-      onclick={handleToggle}
-      aria-label="เลือกธีม"
+      class="theme-toggle-button {sizeClasses}
+             inline-flex items-center justify-center
+             rounded-lg border border-primary
+             bg-surface text-primary
+             hover:bg-surface-hover active:bg-surface-active
+             transition-all duration-200 ease-in-out
+             focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
+             {isOpen ? 'ring-2 ring-primary-500' : ''}"
+      onclick={toggleDropdown}
       aria-expanded={isOpen}
-      aria-haspopup="true"
+      aria-haspopup="menu"
+      title="เลือกธีม"
+      aria-label="เลือกธีม"
     >
-      <!-- Current Theme Icon -->
-      <svg
-        class="transition-transform duration-200 {iconSizeClasses}
-               {isOpen ? 'rotate-180' : ''}"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        {#if currentIcon === 'sun'}
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-          />
-        {:else}
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-          />
-        {/if}
-      </svg>
+      <span class="transition-transform duration-300 {isOpen ? 'scale-110' : ''}">
+        {currentIcon}
+      </span>
       
-      {#if showLabel}
-        <span class="ml-2 text-sm font-medium text-primary">
-          {currentLabel}
-        </span>
-        
-        <!-- Dropdown Arrow -->
-        <svg
-          class="ml-1 w-4 h-4 transition-transform duration-200 
-                 {isOpen ? 'rotate-180' : ''}"
+      <!-- Dropdown Arrow -->
+      {#if size !== 'sm'}
+        <svg 
+          class="w-3 h-3 ml-1 transition-transform duration-200 {isOpen ? 'rotate-180' : ''}"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -264,32 +202,27 @@
     <!-- Dropdown Menu -->
     {#if isOpen}
       <div
-        id="theme-dropdown"
-        class="absolute {position === 'left' ? 'left-0' : 'right-0'} mt-2 
+        class="theme-dropdown-menu absolute {position === 'left' ? 'left-0' : 'right-0'} mt-2 
                w-48 bg-elevated border border-primary rounded-lg shadow-lg 
                py-1 z-50 animate-scale-in"
         role="menu"
         aria-orientation="vertical"
       >
+        
         <!-- Light Theme Option -->
         <button
           type="button"
-          class="w-full px-3 py-2 text-left text-sm hover:bg-surface-hover 
-                 transition-colors duration-150 flex items-center gap-3
-                 {themeState.theme === 'light' ? 'bg-primary-50 text-primary-700' : 'text-primary'}"
+          class="theme-option w-full px-3 py-2 text-left text-sm
+                 hover:bg-surface-hover transition-colors duration-150 
+                 flex items-center gap-3
+                 {themeState.theme === 'light' ? 'bg-primary-50 text-primary-700 font-medium' : 'text-primary'}"
           onclick={() => handleThemeSelect('light')}
           role="menuitem"
         >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-            />
-          </svg>
+          <span class="text-base">☀️</span>
           <span>โหมดสว่าง</span>
           {#if themeState.theme === 'light'}
-            <svg class="w-4 h-4 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg class="w-4 h-4 ml-auto text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           {/if}
@@ -298,22 +231,17 @@
         <!-- Dark Theme Option -->
         <button
           type="button"
-          class="w-full px-3 py-2 text-left text-sm hover:bg-surface-hover 
-                 transition-colors duration-150 flex items-center gap-3
-                 {themeState.theme === 'dark' ? 'bg-primary-50 text-primary-700' : 'text-primary'}"
+          class="theme-option w-full px-3 py-2 text-left text-sm
+                 hover:bg-surface-hover transition-colors duration-150 
+                 flex items-center gap-3
+                 {themeState.theme === 'dark' ? 'bg-primary-50 text-primary-700 font-medium' : 'text-primary'}"
           onclick={() => handleThemeSelect('dark')}
           role="menuitem"
         >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M20.354 15.354A9 9 0 718.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-            />
-          </svg>
+          <span class="text-base">🌙</span>
           <span>โหมดมืด</span>
           {#if themeState.theme === 'dark'}
-            <svg class="w-4 h-4 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg class="w-4 h-4 ml-auto text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           {/if}
@@ -322,117 +250,104 @@
         <!-- System Theme Option -->
         <button
           type="button"
-          class="w-full px-3 py-2 text-left text-sm hover:bg-surface-hover 
-                 transition-colors duration-150 flex items-center gap-3
-                 {themeState.theme === 'system' ? 'bg-primary-50 text-primary-700' : 'text-primary'}"
+          class="theme-option w-full px-3 py-2 text-left text-sm
+                 hover:bg-surface-hover transition-colors duration-150 
+                 flex items-center gap-3
+                 {themeState.theme === 'system' ? 'bg-primary-50 text-primary-700 font-medium' : 'text-primary'}"
           onclick={() => handleThemeSelect('system')}
           role="menuitem"
         >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-            />
-          </svg>
+          <span class="text-base">💻</span>
           <span>ตามระบบ</span>
           {#if themeState.theme === 'system'}
-            <svg class="w-4 h-4 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg class="w-4 h-4 ml-auto text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           {/if}
         </button>
         
-        <!-- Current System Theme Indicator -->
+        <!-- System Theme Indicator -->
         {#if themeState.theme === 'system'}
           <div class="px-3 py-1 text-xs text-tertiary border-t border-primary mt-1">
-            ระบบ: {themeState.systemTheme === 'dark' ? 'โหมดมืด' : 'โหมดสว่าง'}
+            ระบบ: {themeState.systemTheme === 'dark' ? '🌙 มืด' : '☀️ สว่าง'}
           </div>
         {/if}
+        
       </div>
     {/if}
+    
   </div>
 {/if}
 
 <!-- ============================================ -->
-<!-- ICON ONLY VARIANT -->
-<!-- ============================================ -->
-
-{#if variant === 'icon'}
-  <button
-    type="button"
-    class="inline-flex items-center justify-center rounded-full 
-           transition-all duration-200 hover:bg-surface-hover 
-           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 
-           {buttonSizeClasses} {className}"
-    onclick={handleToggle}
-    aria-label="เปลี่ยนธีม"
-    title={currentLabel}
-  >
-    <!-- Animated Icon Container -->
-    <div class="relative {iconSizeClasses}">
-      <!-- Sun Icon -->
-      <svg
-        class="absolute inset-0 transition-all duration-300 transform 
-               {currentIcon === 'sun' ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'}"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-        />
-      </svg>
-      
-      <!-- Moon Icon -->
-      <svg
-        class="absolute inset-0 transition-all duration-300 transform 
-               {currentIcon === 'moon' ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-0 opacity-0'}"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-        />
-      </svg>
-    </div>
-  </button>
-{/if}
-
-<!-- ============================================ -->
-<!-- STYLES -->
+<!-- COMPONENT STYLES -->
 <!-- ============================================ -->
 
 <style>
-  /* Additional component-specific styles if needed */
-  button {
-    -webkit-tap-highlight-color: transparent;
+  /* Theme toggle animations */
+  .theme-toggle-button {
+    background-color: var(--surface-primary);
+    border-color: var(--border-primary);
+    color: var(--text-primary);
   }
   
-  /* Ensure proper z-index layering */
-  .z-50 {
-    z-index: 50;
+  .theme-toggle-button:hover {
+    background-color: var(--surface-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
   }
   
-  /* Custom animation for better performance */
-  @keyframes theme-icon-spin {
+  .theme-toggle-button:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-sm);
+  }
+  
+  /* Dropdown menu styling */
+  .theme-dropdown-menu {
+    background-color: var(--surface-elevated);
+    border-color: var(--border-primary);
+    box-shadow: var(--shadow-lg);
+  }
+  
+  /* Theme option styling */
+  .theme-option {
+    color: var(--text-primary);
+  }
+  
+  .theme-option:hover {
+    background-color: var(--surface-hover);
+  }
+  
+  /* Scale in animation */
+  .animate-scale-in {
+    animation: scaleIn 0.15s ease-out;
+  }
+  
+  @keyframes scaleIn {
     from {
-      transform: rotate(0deg) scale(1);
+      opacity: 0;
+      transform: scale(0.95) translateY(-8px);
     }
     to {
-      transform: rotate(180deg) scale(0.8);
+      opacity: 1;
+      transform: scale(1) translateY(0);
     }
   }
   
-  /* Hover effect for better UX */
-  button:hover svg {
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  /* Focus states */
+  .theme-toggle-button:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+  }
+  
+  .theme-option:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: -2px;
+  }
+  
+  /* Smooth transitions */
+  .theme-toggle-button,
+  .theme-option {
+    transition: all 0.2s ease-in-out;
   }
 </style>

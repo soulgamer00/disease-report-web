@@ -1,21 +1,19 @@
 // frontend/src/lib/stores/index.ts
-// Central export for all stores
-// ✅ Single point of import for stores
+// ✅ Fixed central export for all stores
+// Only export what actually exists in theme.store.ts
 
 // ============================================
-// THEME STORE
+// THEME STORE - ONLY EXISTING EXPORTS
 // ============================================
 export { 
-  themeStore, 
-  themeUtils, 
-  THEME_CONFIG,
+  themeStore,
+  isDark,
+  isLight,
+  isSystemTheme,
+  getThemeIcon,
+  getThemeDisplayName,
   type Theme,
-  type ThemeState,
-  type ThemePreferences,
-  type ThemeStore,
-  type ThemeConfig,
-  type ThemeColors,
-  type ThemeTransitions
+  type ThemeState
 } from './theme.store';
 
 // ============================================

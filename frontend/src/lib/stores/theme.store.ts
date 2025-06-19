@@ -1,6 +1,6 @@
 // frontend/src/lib/stores/theme.store.ts
-// Theme management store with dark mode support
-// ✅ Type-safe theme switching and persistence
+// ✅ Fixed Theme management store with proper implementation
+// Simplified and working version for SvelteKit 5
 
 import { browser } from '$app/environment';
 import { writable } from 'svelte/store';
@@ -18,12 +18,6 @@ export interface ThemeState {
   isLoading: boolean;
 }
 
-export interface ThemePreferences {
-  theme: Theme;
-  autoSwitch: boolean;
-  systemSync: boolean;
-}
-
 // ============================================
 // CONSTANTS
 // ============================================
@@ -36,7 +30,7 @@ const DEFAULT_THEME: Theme = 'system';
 // ============================================
 
 /**
- * Detect system theme preference
+ * Get system theme preference
  */
 function getSystemTheme(): 'light' | 'dark' {
   if (!browser) return 'light';
@@ -83,16 +77,19 @@ function applyTheme(effectiveTheme: 'light' | 'dark'): void {
   
   const root = document.documentElement;
   
-  // Remove existing theme class
-  root.removeAttribute('data-theme');
-  root.classList.remove('light', 'dark');
+  // Add transitioning class to prevent flash
+  root.classList.add('theme-transitioning');
   
-  // Apply new theme
+  // Apply theme
   root.setAttribute('data-theme', effectiveTheme);
-  root.classList.add(effectiveTheme);
   
   // Update meta theme-color for mobile browsers
   updateMetaThemeColor(effectiveTheme);
+  
+  // Remove transitioning class after a short delay
+  setTimeout(() => {
+    root.classList.remove('theme-transitioning');
+  }, 50);
 }
 
 /**
@@ -102,20 +99,15 @@ function updateMetaThemeColor(theme: 'light' | 'dark'): void {
   if (!browser) return;
   
   const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-  const color = theme === 'dark' ? '#020617' : '#ffffff';
+  const color = theme === 'dark' ? '#1e293b' : '#ffffff';
   
   if (metaThemeColor) {
     metaThemeColor.setAttribute('content', color);
-  } else {
-    const meta = document.createElement('meta');
-    meta.name = 'theme-color';
-    meta.content = color;
-    document.head.appendChild(meta);
   }
 }
 
 /**
- * Calculate effective theme based on user preference and system theme
+ * Calculate effective theme based on theme setting and system preference
  */
 function calculateEffectiveTheme(theme: Theme, systemTheme: 'light' | 'dark'): 'light' | 'dark' {
   return theme === 'system' ? systemTheme : theme;
@@ -127,11 +119,11 @@ function calculateEffectiveTheme(theme: Theme, systemTheme: 'light' | 'dark'): '
 
 function createInitialState(): ThemeState {
   const systemTheme = getSystemTheme();
-  const theme = getStoredTheme();
-  const effectiveTheme = calculateEffectiveTheme(theme, systemTheme);
+  const storedTheme = getStoredTheme();
+  const effectiveTheme = calculateEffectiveTheme(storedTheme, systemTheme);
   
   return {
-    theme,
+    theme: storedTheme,
     systemTheme,
     effectiveTheme,
     isLoading: false
@@ -139,263 +131,153 @@ function createInitialState(): ThemeState {
 }
 
 // ============================================
-// THEME STORE
+// STORE CREATION
 // ============================================
 
 function createThemeStore() {
-  const { subscribe, set, update } = writable<ThemeState>(createInitialState());
+  const initialState = createInitialState();
+  const { subscribe, set, update } = writable<ThemeState>(initialState);
   
-  // ============================================
-  // STORE METHODS
-  // ============================================
+  // Apply initial theme
+  if (browser) {
+    applyTheme(initialState.effectiveTheme);
+  }
   
-  /**
-   * Set theme preference
-   */
-  const setTheme = (newTheme: Theme): void => {
-    update(state => {
-      const effectiveTheme = calculateEffectiveTheme(newTheme, state.systemTheme);
-      
-      // Store preference
-      storeTheme(newTheme);
-      
-      // Apply theme to DOM
-      applyTheme(effectiveTheme);
-      
-      return {
-        ...state,
-        theme: newTheme,
-        effectiveTheme
-      };
-    });
-  };
-  
-  /**
-   * Toggle between light and dark themes
-   */
-  const toggleTheme = (): void => {
-    update(state => {
-      const newTheme: Theme = state.effectiveTheme === 'light' ? 'dark' : 'light';
-      const effectiveTheme = calculateEffectiveTheme(newTheme, state.systemTheme);
-      
-      // Store preference
-      storeTheme(newTheme);
-      
-      // Apply theme to DOM
-      applyTheme(effectiveTheme);
-      
-      return {
-        ...state,
-        theme: newTheme,
-        effectiveTheme
-      };
-    });
-  };
-  
-  /**
-   * Update system theme (called when system preference changes)
-   */
-  const updateSystemTheme = (newSystemTheme: 'light' | 'dark'): void => {
-    update(state => {
-      const effectiveTheme = calculateEffectiveTheme(state.theme, newSystemTheme);
-      
-      // Apply theme to DOM if using system theme
-      if (state.theme === 'system') {
-        applyTheme(effectiveTheme);
-      }
-      
-      return {
-        ...state,
-        systemTheme: newSystemTheme,
-        effectiveTheme
-      };
-    });
-  };
-  
-  /**
-   * Initialize theme (called on app startup)
-   */
-  const initialize = (): void => {
-    if (!browser) return;
+  // Watch system theme changes
+  if (browser) {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     
-    update(state => {
-      // Apply current effective theme to DOM
-      applyTheme(state.effectiveTheme);
+    const handleSystemThemeChange = (e: MediaQueryListEvent) => {
+      const newSystemTheme = e.matches ? 'dark' : 'light';
       
-      // Set up system theme change listener
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      
-      const handleChange = (e: MediaQueryListEvent) => {
-        updateSystemTheme(e.matches ? 'dark' : 'light');
-      };
-      
-      // Modern browsers
-      if (mediaQuery.addEventListener) {
-        mediaQuery.addEventListener('change', handleChange);
-      } else {
-        // Legacy browsers
-        mediaQuery.addListener(handleChange);
-      }
-      
-      return {
-        ...state,
-        isLoading: false
-      };
-    });
-  };
-  
-  /**
-   * Get theme preferences for settings
-   */
-  const getPreferences = (): ThemePreferences => {
-    let currentState: ThemeState;
-    const unsubscribe = subscribe(state => {
-      currentState = state;
-    });
-    unsubscribe();
-    
-    return {
-      theme: currentState!.theme,
-      autoSwitch: currentState!.theme === 'system',
-      systemSync: true
+      update(state => {
+        const newEffectiveTheme = calculateEffectiveTheme(state.theme, newSystemTheme);
+        
+        // Apply theme if it changed
+        if (newEffectiveTheme !== state.effectiveTheme) {
+          applyTheme(newEffectiveTheme);
+        }
+        
+        return {
+          ...state,
+          systemTheme: newSystemTheme,
+          effectiveTheme: newEffectiveTheme
+        };
+      });
     };
-  };
-  
-  /**
-   * Apply preferences from settings
-   */
-  const applyPreferences = (preferences: Partial<ThemePreferences>): void => {
-    if (preferences.theme) {
-      setTheme(preferences.theme);
+    
+    // Modern browsers
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleSystemThemeChange);
+    } else {
+      // Legacy browsers  
+      mediaQuery.addListener(handleSystemThemeChange);
     }
-  };
-  
-  /**
-   * Reset theme to system default
-   */
-  const reset = (): void => {
-    setTheme('system');
-  };
-  
-  // ============================================
-  // DERIVED GETTERS
-  // ============================================
-  
-  /**
-   * Check if dark mode is active
-   */
-  const isDark = (): boolean => {
-    let currentState: ThemeState;
-    const unsubscribe = subscribe(state => {
-      currentState = state;
-    });
-    unsubscribe();
-    
-    return currentState!.effectiveTheme === 'dark';
-  };
-  
-  /**
-   * Check if light mode is active
-   */
-  const isLight = (): boolean => {
-    return !isDark();
-  };
-  
-  /**
-   * Check if using system theme
-   */
-  const isSystemTheme = (): boolean => {
-    let currentState: ThemeState;
-    const unsubscribe = subscribe(state => {
-      currentState = state;
-    });
-    unsubscribe();
-    
-    return currentState!.theme === 'system';
-  };
-  
-  /**
-   * Get CSS class for current theme
-   */
-  const getThemeClass = (): string => {
-    let currentState: ThemeState;
-    const unsubscribe = subscribe(state => {
-      currentState = state;
-    });
-    unsubscribe();
-    
-    return currentState!.effectiveTheme;
-  };
-  
-  /**
-   * Get theme icon name for UI
-   */
-  const getThemeIcon = (): string => {
-    let currentState: ThemeState;
-    const unsubscribe = subscribe(state => {
-      currentState = state;
-    });
-    unsubscribe();
-    
-    const { theme, effectiveTheme } = currentState!;
-    
-    if (theme === 'system') {
-      return effectiveTheme === 'dark' ? 'moon' : 'sun';
-    }
-    
-    return theme === 'dark' ? 'moon' : 'sun';
-  };
-  
-  /**
-   * Get theme display name for UI
-   */
-  const getThemeDisplayName = (): string => {
-    let currentState: ThemeState;
-    const unsubscribe = subscribe(state => {
-      currentState = state;
-    });
-    unsubscribe();
-    
-    const { theme } = currentState!;
-    
-    switch (theme) {
-      case 'light':
-        return 'โหมดสว่าง';
-      case 'dark':
-        return 'โหมดมืด';
-      case 'system':
-        return 'ตามระบบ';
-      default:
-        return 'ไม่ทราบ';
-    }
-  };
-  
-  // ============================================
-  // RETURN STORE INTERFACE
-  // ============================================
+  }
   
   return {
-    // Store subscription
     subscribe,
     
-    // State setters
-    setTheme,
-    toggleTheme,
-    updateSystemTheme,
-    initialize,
-    reset,
+    /**
+     * Set theme preference
+     */
+    setTheme: (newTheme: Theme) => {
+      update(state => {
+        const systemTheme = getSystemTheme();
+        const effectiveTheme = calculateEffectiveTheme(newTheme, systemTheme);
+        
+        // Store theme preference
+        storeTheme(newTheme);
+        
+        // Apply theme to DOM
+        applyTheme(effectiveTheme);
+        
+        return {
+          ...state,
+          theme: newTheme,
+          systemTheme,
+          effectiveTheme
+        };
+      });
+    },
     
-    // Preferences
-    getPreferences,
-    applyPreferences,
+    /**
+     * Toggle between light and dark (skipping system)
+     */
+    toggle: () => {
+      update(state => {
+        // If currently system, toggle to opposite of effective theme
+        // If light/dark, toggle to opposite
+        const currentEffective = state.effectiveTheme;
+        const newTheme: Theme = currentEffective === 'light' ? 'dark' : 'light';
+        
+        const systemTheme = getSystemTheme();
+        const effectiveTheme = calculateEffectiveTheme(newTheme, systemTheme);
+        
+        // Store and apply
+        storeTheme(newTheme);
+        applyTheme(effectiveTheme);
+        
+        return {
+          ...state,
+          theme: newTheme,
+          systemTheme,
+          effectiveTheme
+        };
+      });
+    },
     
-    // Getters
-    isDark,
-    isLight,
-    isSystemTheme,
-    getThemeClass,
-    getThemeIcon,
-    getThemeDisplayName
+    /**
+     * Reset to system theme
+     */
+    reset: () => {
+      update(state => {
+        const systemTheme = getSystemTheme();
+        const effectiveTheme = calculateEffectiveTheme('system', systemTheme);
+        
+        storeTheme('system');
+        applyTheme(effectiveTheme);
+        
+        return {
+          ...state,
+          theme: 'system',
+          systemTheme,
+          effectiveTheme
+        };
+      });
+    },
+    
+    /**
+     * Initialize theme (call this in onMount)
+     */
+    init: () => {
+      update(state => {
+        const systemTheme = getSystemTheme();
+        const storedTheme = getStoredTheme();
+        const effectiveTheme = calculateEffectiveTheme(storedTheme, systemTheme);
+        
+        applyTheme(effectiveTheme);
+        
+        return {
+          theme: storedTheme,
+          systemTheme,
+          effectiveTheme,
+          isLoading: false
+        };
+      });
+    },
+    
+    /**
+     * Get current theme state (for non-reactive access)
+     */
+    getCurrentState: (): ThemeState => {
+      let currentState: ThemeState = initialState;
+      const unsubscribe = subscribe(state => {
+        currentState = state;
+      });
+      unsubscribe();
+      return currentState;
+    }
   };
 }
 
@@ -406,112 +288,40 @@ function createThemeStore() {
 export const themeStore = createThemeStore();
 
 // ============================================
-// THEME UTILITIES
+// CONVENIENCE EXPORTS
 // ============================================
 
-/**
- * Theme utility functions for use in components
- */
-export const themeUtils = {
-  /**
-   * Get appropriate icon color for current theme
-   */
-  getIconColor: (theme: 'light' | 'dark') => {
-    return theme === 'dark' ? '#e2e8f0' : '#475569';
-  },
-  
-  /**
-   * Get appropriate background color for current theme
-   */
-  getBackgroundColor: (theme: 'light' | 'dark') => {
-    return theme === 'dark' ? '#020617' : '#ffffff';
-  },
-  
-  /**
-   * Get appropriate text color for current theme
-   */
-  getTextColor: (theme: 'light' | 'dark') => {
-    return theme === 'dark' ? '#f8fafc' : '#0f172a';
-  },
-  
-  /**
-   * Get appropriate border color for current theme
-   */
-  getBorderColor: (theme: 'light' | 'dark') => {
-    return theme === 'dark' ? '#334155' : '#e2e8f0';
-  },
-  
-  /**
-   * Check if theme has good contrast
-   */
-  hasGoodContrast: (theme: 'light' | 'dark') => {
-    return true; // Our themes are designed for good contrast
-  },
-  
-  /**
-   * Get theme-appropriate CSS variables
-   */
-  getCSSVariables: (theme: 'light' | 'dark') => {
-    if (theme === 'dark') {
-      return {
-        '--bg-primary': '#020617',
-        '--text-primary': '#f8fafc',
-        '--border-primary': '#334155'
-      };
-    }
-    
-    return {
-      '--bg-primary': '#ffffff',
-      '--text-primary': '#0f172a',
-      '--border-primary': '#e2e8f0'
-    };
+// For components that just need to check current theme
+export const isDark = () => {
+  const state = themeStore.getCurrentState();
+  return state.effectiveTheme === 'dark';
+};
+
+export const isLight = () => {
+  const state = themeStore.getCurrentState();
+  return state.effectiveTheme === 'light';
+};
+
+export const isSystemTheme = () => {
+  const state = themeStore.getCurrentState();
+  return state.theme === 'system';
+};
+
+// Theme icons for UI
+export const getThemeIcon = (theme: Theme) => {
+  switch (theme) {
+    case 'light': return '☀️';
+    case 'dark': return '🌙';
+    case 'system': return '💻';
+    default: return '💻';
   }
 };
 
-// ============================================
-// THEME CONSTANTS
-// ============================================
-
-export const THEME_CONFIG = {
-  STORAGE_KEY: THEME_STORAGE_KEY,
-  DEFAULT_THEME,
-  THEMES: ['light', 'dark', 'system'] as const,
-  
-  BREAKPOINTS: {
-    sm: '640px',
-    md: '768px',
-    lg: '1024px',
-    xl: '1280px',
-    '2xl': '1536px'
-  },
-  
-  COLORS: {
-    light: {
-      primary: '#3b82f6',
-      background: '#ffffff',
-      text: '#0f172a',
-      border: '#e2e8f0'
-    },
-    dark: {
-      primary: '#60a5fa',
-      background: '#020617',
-      text: '#f8fafc',
-      border: '#334155'
-    }
-  },
-  
-  TRANSITIONS: {
-    fast: '150ms ease-in-out',
-    base: '200ms ease-in-out',
-    slow: '300ms ease-in-out'
+export const getThemeDisplayName = (theme: Theme) => {
+  switch (theme) {
+    case 'light': return 'โหมดสว่าง';
+    case 'dark': return 'โหมดมืด';
+    case 'system': return 'ตามระบบ';
+    default: return 'ตามระบบ';
   }
-} as const;
-
-// ============================================
-// TYPE EXPORTS
-// ============================================
-
-export type ThemeStore = ReturnType<typeof createThemeStore>;
-export type ThemeConfig = typeof THEME_CONFIG;
-export type ThemeColors = typeof THEME_CONFIG.COLORS;
-export type ThemeTransitions = typeof THEME_CONFIG.TRANSITIONS;
+};
