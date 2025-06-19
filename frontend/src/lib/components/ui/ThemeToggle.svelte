@@ -1,6 +1,6 @@
 <!-- frontend/src/lib/components/ui/ThemeToggle.svelte -->
-<!-- ✅ Fixed Theme Toggle Component -->
-<!-- Clean, working, and beautiful theme switcher -->
+<!-- ✅ FIXED Theme Toggle Component -->
+<!-- Complete, working, and beautiful theme switcher -->
 
 <script lang="ts">
   import { browser } from '$app/environment';
@@ -82,45 +82,53 @@
   function handleThemeSelect(theme: Theme) {
     themeStore.setTheme(theme);
     closeDropdown();
-    
-    // Optional: Show feedback
-    console.log(`🎨 Theme changed to: ${theme}`);
   }
   
-  function handleSimpleToggle() {
-    themeStore.toggle();
-    console.log(`🔄 Theme toggled to: ${themeState.effectiveTheme}`);
+  function handleToggleTheme() {
+    if (variant === 'button') {
+      themeStore.toggle();
+    } else {
+      toggleDropdown();
+    }
   }
   
-  // Click outside to close dropdown
-  function handleClickOutside(event: MouseEvent) {
+  // Close dropdown when clicking outside
+  function handleOutsideClick(event: MouseEvent) {
     if (!buttonRef?.contains(event.target as Node)) {
       closeDropdown();
     }
   }
   
-  // Setup click outside listener
-  $effect(() => {
-    if (browser && isOpen) {
-      document.addEventListener('click', handleClickOutside);
-      return () => {
-        document.removeEventListener('click', handleClickOutside);
-      };
-    }
-  });
-  
-  // Close dropdown on Escape key
+  // Handle keyboard navigation
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && isOpen) {
-      closeDropdown();
-      buttonRef?.focus();
+    if (!isOpen) return;
+    
+    switch (event.key) {
+      case 'Escape':
+        event.preventDefault();
+        closeDropdown();
+        buttonRef?.focus();
+        break;
+      case 'Enter':
+      case ' ':
+        event.preventDefault();
+        closeDropdown();
+        break;
     }
   }
+
+  // ============================================
+  // LIFECYCLE
+  // ============================================
   
+  // Add/remove event listeners for outside clicks
   $effect(() => {
     if (browser && isOpen) {
+      document.addEventListener('click', handleOutsideClick);
       document.addEventListener('keydown', handleKeydown);
+      
       return () => {
+        document.removeEventListener('click', handleOutsideClick);
         document.removeEventListener('keydown', handleKeydown);
       };
     }
@@ -128,156 +136,126 @@
 </script>
 
 <!-- ============================================ -->
-<!-- SIMPLE BUTTON VARIANT -->
+<!-- COMPONENT TEMPLATE -->
 <!-- ============================================ -->
 
-{#if variant === 'button'}
+<div class="theme-toggle-container relative">
+  
+  <!-- Toggle Button -->
   <button
+    bind:this={buttonRef}
     type="button"
-    class="theme-toggle-button {sizeClasses} 
-           inline-flex items-center justify-center
-           rounded-lg border border-primary
-           bg-surface text-primary
-           hover:bg-surface-hover active:bg-surface-active
-           transition-all duration-200 ease-in-out
-           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-    onclick={handleSimpleToggle}
-    title="สลับธีม (Ctrl+Shift+D)"
-    aria-label="สลับธีม"
+    onclick={handleToggleTheme}
+    class="theme-toggle-button inline-flex items-center justify-center gap-2 rounded-lg font-medium 
+           focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 
+           hover:scale-105 active:scale-95 {sizeClasses}"
+    class:ring-2={isOpen}
+    style="background-color: var(--surface-primary); border: 1px solid var(--border-primary); 
+           color: var(--text-primary);"
+    aria-label="เปลี่ยนธีม"
+    aria-expanded={variant === 'dropdown' ? isOpen : undefined}
+    aria-haspopup={variant === 'dropdown' ? 'menu' : undefined}
   >
-    <span class="transition-transform duration-300 hover:scale-110">
+    
+    <!-- Theme Icon -->
+    <span class="flex-shrink-0 transition-transform duration-200" 
+          class:rotate-180={themeState.effectiveTheme === 'dark'}>
       {currentIcon}
     </span>
     
+    <!-- Theme Label (optional) -->
     {#if showLabel}
-      <span class="ml-2 text-sm font-medium">
+      <span class="hidden sm:inline-block text-sm font-medium">
         {currentDisplayName}
       </span>
     {/if}
-  </button>
-
-<!-- ============================================ -->
-<!-- DROPDOWN VARIANT -->
-<!-- ============================================ -->
-
-{:else}
-  <div class="theme-toggle-dropdown relative">
     
-    <!-- Toggle Button -->
-    <button
-      bind:this={buttonRef}
-      type="button"
-      class="theme-toggle-button {sizeClasses}
-             inline-flex items-center justify-center
-             rounded-lg border border-primary
-             bg-surface text-primary
-             hover:bg-surface-hover active:bg-surface-active
-             transition-all duration-200 ease-in-out
-             focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
-             {isOpen ? 'ring-2 ring-primary-500' : ''}"
-      onclick={toggleDropdown}
-      aria-expanded={isOpen}
-      aria-haspopup="menu"
-      title="เลือกธีม"
-      aria-label="เลือกธีม"
-    >
-      <span class="transition-transform duration-300 {isOpen ? 'scale-110' : ''}">
-        {currentIcon}
-      </span>
-      
-      <!-- Dropdown Arrow -->
-      {#if size !== 'sm'}
-        <svg 
-          class="w-3 h-3 ml-1 transition-transform duration-200 {isOpen ? 'rotate-180' : ''}"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      {/if}
-    </button>
-    
-    <!-- Dropdown Menu -->
-    {#if isOpen}
-      <div
-        class="theme-dropdown-menu absolute {position === 'left' ? 'left-0' : 'right-0'} mt-2 
-               w-48 bg-elevated border border-primary rounded-lg shadow-lg 
-               py-1 z-50 animate-scale-in"
-        role="menu"
-        aria-orientation="vertical"
+    <!-- Dropdown Arrow (only for dropdown variant) -->
+    {#if variant === 'dropdown'}
+      <svg 
+        class="w-4 h-4 transition-transform duration-200 {isOpen ? 'rotate-180' : ''}" 
+        fill="none" 
+        stroke="currentColor" 
+        viewBox="0 0 24 24"
+        aria-hidden="true"
       >
-        
-        <!-- Light Theme Option -->
-        <button
-          type="button"
-          class="theme-option w-full px-3 py-2 text-left text-sm
-                 hover:bg-surface-hover transition-colors duration-150 
-                 flex items-center gap-3
-                 {themeState.theme === 'light' ? 'bg-primary-50 text-primary-700 font-medium' : 'text-primary'}"
-          onclick={() => handleThemeSelect('light')}
-          role="menuitem"
-        >
-          <span class="text-base">☀️</span>
-          <span>โหมดสว่าง</span>
-          {#if themeState.theme === 'light'}
-            <svg class="w-4 h-4 ml-auto text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          {/if}
-        </button>
-        
-        <!-- Dark Theme Option -->
-        <button
-          type="button"
-          class="theme-option w-full px-3 py-2 text-left text-sm
-                 hover:bg-surface-hover transition-colors duration-150 
-                 flex items-center gap-3
-                 {themeState.theme === 'dark' ? 'bg-primary-50 text-primary-700 font-medium' : 'text-primary'}"
-          onclick={() => handleThemeSelect('dark')}
-          role="menuitem"
-        >
-          <span class="text-base">🌙</span>
-          <span>โหมดมืด</span>
-          {#if themeState.theme === 'dark'}
-            <svg class="w-4 h-4 ml-auto text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          {/if}
-        </button>
-        
-        <!-- System Theme Option -->
-        <button
-          type="button"
-          class="theme-option w-full px-3 py-2 text-left text-sm
-                 hover:bg-surface-hover transition-colors duration-150 
-                 flex items-center gap-3
-                 {themeState.theme === 'system' ? 'bg-primary-50 text-primary-700 font-medium' : 'text-primary'}"
-          onclick={() => handleThemeSelect('system')}
-          role="menuitem"
-        >
-          <span class="text-base">💻</span>
-          <span>ตามระบบ</span>
-          {#if themeState.theme === 'system'}
-            <svg class="w-4 h-4 ml-auto text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          {/if}
-        </button>
-        
-        <!-- System Theme Indicator -->
-        {#if themeState.theme === 'system'}
-          <div class="px-3 py-1 text-xs text-tertiary border-t border-primary mt-1">
-            ระบบ: {themeState.systemTheme === 'dark' ? '🌙 มืด' : '☀️ สว่าง'}
-          </div>
-        {/if}
-        
-      </div>
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+      </svg>
     {/if}
     
-  </div>
-{/if}
+  </button>
+
+  <!-- Dropdown Menu (only for dropdown variant) -->
+  {#if variant === 'dropdown' && isOpen}
+    <div 
+      class="theme-dropdown-menu absolute z-50 mt-2 py-1 rounded-lg shadow-lg border animate-scale-in
+             {position === 'right' ? 'right-0' : 'left-0'}"
+      style="background-color: var(--surface-elevated); border-color: var(--border-primary); 
+             box-shadow: var(--shadow-lg); min-width: 160px;"
+      role="menu"
+      aria-orientation="vertical"
+    >
+      
+      <!-- Light Theme Option -->
+      <button
+        type="button"
+        onclick={() => handleThemeSelect('light')}
+        class="theme-option w-full px-4 py-2 text-left text-sm flex items-center gap-3 
+               transition-colors duration-150 hover:scale-[1.02] focus:outline-none"
+        class:font-semibold={themeState.theme === 'light'}
+        style="color: var(--text-primary);"
+        role="menuitem"
+      >
+        <span class="text-base">{getThemeIcon('light')}</span>
+        <span>{getThemeDisplayName('light')}</span>
+        {#if themeState.theme === 'light'}
+          <span class="ml-auto text-xs" style="color: var(--primary-500);">✓</span>
+        {/if}
+      </button>
+      
+      <!-- Dark Theme Option -->
+      <button
+        type="button"
+        onclick={() => handleThemeSelect('dark')}
+        class="theme-option w-full px-4 py-2 text-left text-sm flex items-center gap-3 
+               transition-colors duration-150 hover:scale-[1.02] focus:outline-none"
+        class:font-semibold={themeState.theme === 'dark'}
+        style="color: var(--text-primary);"
+        role="menuitem"
+      >
+        <span class="text-base">{getThemeIcon('dark')}</span>
+        <span>{getThemeDisplayName('dark')}</span>
+        {#if themeState.theme === 'dark'}
+          <span class="ml-auto text-xs" style="color: var(--primary-500);">✓</span>
+        {/if}
+      </button>
+      
+      <!-- System Theme Option -->
+      <button
+        type="button"
+        onclick={() => handleThemeSelect('system')}
+        class="theme-option w-full px-4 py-2 text-left text-sm flex items-center gap-3 
+               transition-colors duration-150 hover:scale-[1.02] focus:outline-none"
+        class:font-semibold={themeState.theme === 'system'}
+        style="color: var(--text-primary);"
+        role="menuitem"
+      >
+        <span class="text-base">{getThemeIcon('system')}</span>
+        <div class="flex flex-col">
+          <span>{getThemeDisplayName('system')}</span>
+          <span class="text-xs opacity-75">
+            ปัจจุบัน: {themeState.systemTheme === 'dark' ? 'มืด' : 'สว่าง'}
+          </span>
+        </div>
+        {#if themeState.theme === 'system'}
+          <span class="ml-auto text-xs" style="color: var(--primary-500);">✓</span>
+        {/if}
+      </button>
+      
+    </div>
+  {/if}
+  
+</div>
 
 <!-- ============================================ -->
 <!-- COMPONENT STYLES -->

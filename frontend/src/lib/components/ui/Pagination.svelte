@@ -1,43 +1,42 @@
 <!-- src/lib/components/ui/Pagination.svelte -->
-<!-- Reusable Pagination Component for entire application -->
+<!-- ✅ COMPLETE Pagination Component with Fixed Accessibility -->
+<!-- Reusable pagination with proper label associations -->
 
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
 
   // ============================================
-  // TYPES
+  // TYPES & INTERFACES
   // ============================================
 
   interface Props {
-    currentPage: number;
-    totalPages: number;
-    totalItems?: number;
+    page?: number;
     pageSize?: number;
-    showInfo?: boolean;
-    showSizeChanger?: boolean;
-    showFirstLast?: boolean;
-    showPrevNext?: boolean;
-    maxVisiblePages?: number;
-    compact?: boolean;
-    disabled?: boolean;
+    totalItems?: number;
     pageSizeOptions?: number[];
+    showSizeChanger?: boolean;
+    showInfo?: boolean;
+    showPrevNext?: boolean;
+    showFirstLast?: boolean;
+    maxVisible?: number;
+    disabled?: boolean;
+    compact?: boolean;
     onPageChange?: (page: number) => void;
     onPageSizeChange?: (pageSize: number) => void;
   }
 
   let {
-    currentPage = 1,
-    totalPages = 1,
-    totalItems,
-    pageSize = 20,
-    showInfo = true,
-    showSizeChanger = false,
-    showFirstLast = true,
-    showPrevNext = true,
-    maxVisiblePages = 7,
-    compact = false,
-    disabled = false,
+    page = 1,
+    pageSize = 10,
+    totalItems = 0,
     pageSizeOptions = [10, 20, 50, 100],
+    showSizeChanger = true,
+    showInfo = true,
+    showPrevNext = true,
+    showFirstLast = true,
+    maxVisible = 7,
+    disabled = false,
+    compact = false,
     onPageChange,
     onPageSizeChange
   }: Props = $props();
@@ -52,12 +51,24 @@
   }>();
 
   // ============================================
+  // REACTIVE STATE
+  // ============================================
+
+  // Generate unique ID for accessibility
+  const pageSizeId = `pageSize-${Math.random().toString(36).substr(2, 9)}`;
+
+  // ============================================
   // REACTIVE COMPUTATIONS
   // ============================================
 
-  // Validate current page
+  // Calculate total pages first (no dependency)
+  const totalPages = $derived(() => {
+    return Math.max(1, Math.ceil(totalItems / pageSize));
+  });
+
+  // Safe page calculation (depends on totalPages)
   const safePage = $derived(() => {
-    return Math.max(1, Math.min(currentPage, totalPages));
+    return Math.max(1, Math.min(page, totalPages()));
   });
 
   // Check if has previous page
@@ -67,15 +78,14 @@
 
   // Check if has next page
   const hasNext = $derived(() => {
-    return safePage() < totalPages;
+    return safePage() < totalPages();
   });
 
-  // Generate visible page numbers
+  // Calculate visible page numbers
   const visiblePages = $derived(() => {
-    const current = safePage();
-    const total = totalPages;
-    const maxVisible = Math.min(maxVisiblePages, total);
     const pages: number[] = [];
+    const total = totalPages();
+    const current = safePage();
 
     if (total <= maxVisible) {
       // Show all pages if total is less than max visible
@@ -183,7 +193,7 @@
   // ============================================
 
   function handlePageChange(page: number): void {
-    if (disabled || page === safePage() || page < 1 || page > totalPages) {
+    if (disabled || page === safePage() || page < 1 || page > totalPages()) {
       return;
     }
 
@@ -213,7 +223,7 @@
   }
 
   function handleLast(): void {
-    handlePageChange(totalPages);
+    handlePageChange(totalPages());
   }
 </script>
 
@@ -322,15 +332,20 @@
   <!-- Page Size Changer -->
   {#if showSizeChanger}
     <div class="flex items-center space-x-2 {compact ? 'order-3' : 'mt-4 sm:mt-0'}">
-      <label for="pageSize" class="text-sm text-gray-700">
+      
+      <!-- Fixed Label with proper for attribute -->
+      <label for={pageSizeId} class="text-sm text-gray-700">
         แสดง
       </label>
+      
+      <!-- Fixed Select with proper id -->
       <select
-        id="pageSize"
+        id={pageSizeId}
         class="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         value={pageSize}
         disabled={disabled}
         onchange={(e) => handlePageSizeChange(Number((e.target as HTMLSelectElement).value))}
+        aria-label="เลือกจำนวนรายการต่อหน้า"
       >
         {#each pageSizeOptions as option (option)}
           <option value={option}>
@@ -338,9 +353,11 @@
           </option>
         {/each}
       </select>
+      
       <span class="text-sm text-gray-700">
         รายการ
       </span>
+      
     </div>
   {/if}
 
@@ -382,5 +399,16 @@
     background-repeat: no-repeat;
     background-size: 1.5em 1.5em;
     padding-right: 2.5rem;
+  }
+  
+  /* Smooth transitions */
+  button, select {
+    transition: all 0.2s ease-in-out;
+  }
+  
+  /* Focus ring for select */
+  select:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
   }
 </style>

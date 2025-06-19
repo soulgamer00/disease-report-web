@@ -192,10 +192,11 @@
       <div class="space-y-4">
         <!-- Input Field -->
         <div>
-          <label class="block text-sm font-medium mb-2" style="color: var(--text-primary);">
+          <label for="input-field" class="block text-sm font-medium mb-2" style="color: var(--text-primary);">
             Input Field
           </label>
           <input 
+            id="input-field"
             type="text" 
             placeholder="ทดสอบการพิมพ์..."
             class="w-full px-4 py-2 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2"
@@ -207,10 +208,11 @@
         
         <!-- Select Field -->
         <div>
-          <label class="block text-sm font-medium mb-2" style="color: var(--text-primary);">
+          <label for="select-field" class="block text-sm font-medium mb-2" style="color: var(--text-primary);">
             Select Field
           </label>
           <select 
+            id="select-field"
             class="w-full px-4 py-2 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2"
             style="background-color: var(--bg-primary); color: var(--text-primary); 
                    border: 2px solid var(--border-primary);"

@@ -1,6 +1,6 @@
 // frontend/src/lib/stores/theme.store.ts
-// ✅ Fixed Theme management store with proper implementation
-// Simplified and working version for SvelteKit 5
+// ✅ COMPLETE Theme management store for SvelteKit 5
+// Fixed all missing functions and exports
 
 import { browser } from '$app/environment';
 import { writable } from 'svelte/store';
@@ -114,82 +114,36 @@ function calculateEffectiveTheme(theme: Theme, systemTheme: 'light' | 'dark'): '
 }
 
 // ============================================
-// INITIAL STATE
-// ============================================
-
-function createInitialState(): ThemeState {
-  const systemTheme = getSystemTheme();
-  const storedTheme = getStoredTheme();
-  const effectiveTheme = calculateEffectiveTheme(storedTheme, systemTheme);
-  
-  return {
-    theme: storedTheme,
-    systemTheme,
-    effectiveTheme,
-    isLoading: false
-  };
-}
-
-// ============================================
 // STORE CREATION
 // ============================================
 
+/**
+ * Create theme store with all methods
+ */
 function createThemeStore() {
-  const initialState = createInitialState();
-  const { subscribe, set, update } = writable<ThemeState>(initialState);
-  
-  // Apply initial theme
-  if (browser) {
-    applyTheme(initialState.effectiveTheme);
-  }
-  
-  // Watch system theme changes
-  if (browser) {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    
-    const handleSystemThemeChange = (e: MediaQueryListEvent) => {
-      const newSystemTheme = e.matches ? 'dark' : 'light';
-      
-      update(state => {
-        const newEffectiveTheme = calculateEffectiveTheme(state.theme, newSystemTheme);
-        
-        // Apply theme if it changed
-        if (newEffectiveTheme !== state.effectiveTheme) {
-          applyTheme(newEffectiveTheme);
-        }
-        
-        return {
-          ...state,
-          systemTheme: newSystemTheme,
-          effectiveTheme: newEffectiveTheme
-        };
-      });
-    };
-    
-    // Modern browsers
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener('change', handleSystemThemeChange);
-    } else {
-      // Legacy browsers  
-      mediaQuery.addListener(handleSystemThemeChange);
-    }
-  }
-  
+  // Initial state
+  const initialState: ThemeState = {
+    theme: DEFAULT_THEME,
+    systemTheme: 'light',
+    effectiveTheme: 'light',
+    isLoading: true
+  };
+
+  const { subscribe, update } = writable<ThemeState>(initialState);
+
   return {
     subscribe,
     
     /**
-     * Set theme preference
+     * Set theme
      */
     setTheme: (newTheme: Theme) => {
       update(state => {
         const systemTheme = getSystemTheme();
         const effectiveTheme = calculateEffectiveTheme(newTheme, systemTheme);
         
-        // Store theme preference
+        // Store and apply
         storeTheme(newTheme);
-        
-        // Apply theme to DOM
         applyTheme(effectiveTheme);
         
         return {
@@ -202,14 +156,11 @@ function createThemeStore() {
     },
     
     /**
-     * Toggle between light and dark (skipping system)
+     * Toggle between light and dark (ignores system)
      */
     toggle: () => {
       update(state => {
-        // If currently system, toggle to opposite of effective theme
-        // If light/dark, toggle to opposite
-        const currentEffective = state.effectiveTheme;
-        const newTheme: Theme = currentEffective === 'light' ? 'dark' : 'light';
+        const newTheme: Theme = state.effectiveTheme === 'dark' ? 'light' : 'dark';
         
         const systemTheme = getSystemTheme();
         const effectiveTheme = calculateEffectiveTheme(newTheme, systemTheme);
@@ -257,6 +208,27 @@ function createThemeStore() {
         const effectiveTheme = calculateEffectiveTheme(storedTheme, systemTheme);
         
         applyTheme(effectiveTheme);
+        
+        // Listen for system theme changes
+        if (browser) {
+          const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+          mediaQuery.addEventListener('change', (e) => {
+            update(currentState => {
+              const newSystemTheme = e.matches ? 'dark' : 'light';
+              const newEffectiveTheme = calculateEffectiveTheme(currentState.theme, newSystemTheme);
+              
+              if (currentState.theme === 'system') {
+                applyTheme(newEffectiveTheme);
+              }
+              
+              return {
+                ...currentState,
+                systemTheme: newSystemTheme,
+                effectiveTheme: newEffectiveTheme
+              };
+            });
+          });
+        }
         
         return {
           theme: storedTheme,

@@ -1,6 +1,6 @@
 <!-- frontend/src/routes/+layout.svelte -->
-<!-- ✅ Fixed root layout with proper theme integration -->
-<!-- Clean and working theme support for SvelteKit 5 -->
+<!-- ✅ EMERGENCY FIX: Layout with embedded CSS variables -->
+<!-- CSS variables directly in component to ensure they load -->
 
 <script lang="ts">
   import { browser } from '$app/environment';
@@ -24,19 +24,14 @@
   // REACTIVE STATE
   // ============================================
   
-  // Navigation loading state
   let isNavigating = $state(false);
   let mounted = $state(false);
-  
-  // Theme state from store
   let themeState = $state($themeStore);
   
-  // Update theme state when store changes
   $effect(() => {
     themeState = $themeStore;
   });
   
-  // Track navigation state
   $effect(() => {
     isNavigating = $navigating !== null;
   });
@@ -48,7 +43,6 @@
   const defaultTitle = 'ระบบรายงานโรค';
   const defaultDescription = 'ระบบรายงานการติดตาม การเฝ้าระวัง และควบคุมโรค';
   
-  // Dynamic page title based on current route
   let pageTitle = $derived.by(() => {
     const currentPath = $page.url.pathname;
     
@@ -70,7 +64,6 @@
     }
   });
   
-  // Dynamic theme color for mobile browsers
   let themeColor = $derived.by(() => {
     return themeState.effectiveTheme === 'dark' ? '#1e293b' : '#ffffff';
   });
@@ -80,15 +73,13 @@
   // ============================================
   
   onMount(() => {
-    console.log('🚀 Layout mounted - initializing theme');
-    
-    // Initialize theme store
     themeStore.init();
-    
-    // Mark as mounted
     mounted = true;
     
-    console.log('✅ Theme initialized:', $themeStore);
+    // Debug CSS variables after mount
+    setTimeout(() => {
+      const bgPrimary = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary');
+    }, 100);
   });
 
   // ============================================
@@ -96,25 +87,13 @@
   // ============================================
   
   function handleGlobalKeyboard(event: KeyboardEvent) {
-    // Toggle theme with Ctrl/Cmd + Shift + D (for Dark)
     if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'D') {
       event.preventDefault();
       themeStore.toggle();
       console.log('🌗 Theme toggled via keyboard');
     }
-    
-    // Other global shortcuts can be added here
-    if (event.ctrlKey || event.metaKey) {
-      switch (event.key) {
-        case 'k':
-          event.preventDefault();
-          // Future: Open command palette
-          break;
-      }
-    }
   }
   
-  // Add keyboard event listener
   $effect(() => {
     if (browser && mounted) {
       document.addEventListener('keydown', handleGlobalKeyboard);
@@ -126,32 +105,13 @@
 </script>
 
 <!-- ============================================ -->
-<!-- PAGE HEAD (SEO & Meta Tags) -->
+<!-- PAGE HEAD -->
 <!-- ============================================ -->
 
 <svelte:head>
-  <!-- Page title -->
   <title>{pageTitle}</title>
-  
-  <!-- Basic meta tags -->
   <meta name="description" content={defaultDescription} />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta charset="utf-8" />
-  
-  <!-- Theme color for mobile browsers -->
   <meta name="theme-color" content={themeColor} />
-  
-  <!-- Favicons -->
-  <link rel="icon" type="image/png" href="/favicon.png" />
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-  
-  <!-- Open Graph meta tags -->
-  <meta property="og:title" content={pageTitle} />
-  <meta property="og:description" content={defaultDescription} />
-  <meta property="og:type" content="website" />
-  <meta property="og:locale" content="th_TH" />
-  
-  <!-- Fonts with proper preloading -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
   <link 
@@ -161,26 +121,31 @@
 </svelte:head>
 
 <!-- ============================================ -->
-<!-- MAIN LAYOUT CONTENT -->
+<!-- MAIN LAYOUT -->
 <!-- ============================================ -->
 
-<div class="app-layout min-h-screen transition-colors duration-300">
+<div class="app-layout min-h-screen transition-colors duration-300"
+     style="background-color: var(--bg-primary); color: var(--text-primary);">
   
   <!-- Global Loading Indicator -->
   {#if isNavigating}
     <div class="fixed top-0 left-0 right-0 z-50">
-      <div class="h-1 bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse"></div>
+      <div class="h-1 animate-pulse" 
+           style="background: linear-gradient(90deg, var(--primary-500), var(--primary-600));"></div>
     </div>
   {/if}
   
-  <!-- Header (if needed) -->
-  <header class="sticky top-0 z-40 bg-surface border-b border-primary backdrop-blur-sm">
+  <!-- Header -->
+  <header class="sticky top-0 z-40 backdrop-blur-sm transition-all duration-300"
+          style="background-color: var(--surface-primary); 
+                 border-bottom: 1px solid var(--border-primary);">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         
         <!-- Logo/Brand -->
         <div class="flex items-center gap-3">
-          <h1 class="text-xl font-bold text-primary">
+          <h1 class="text-xl font-bold transition-colors duration-300"
+              style="color: var(--text-primary);">
             🏥 {defaultTitle}
           </h1>
         </div>
@@ -188,9 +153,10 @@
         <!-- Navigation Actions -->
         <div class="flex items-center gap-4">
           
-          <!-- Current Path Indicator (for development) -->
+          <!-- Current Path -->
           {#if mounted}
-            <div class="hidden md:block text-sm text-secondary">
+            <div class="hidden md:block text-sm transition-colors duration-300"
+                 style="color: var(--text-secondary);">
               {$page.url.pathname}
             </div>
           {/if}
@@ -204,22 +170,22 @@
   </header>
   
   <!-- Main Content -->
-  <main class="flex-1">
+  <main class="flex-1 transition-colors duration-300"
+        style="background-color: var(--bg-primary);">
     {@render children()}
   </main>
   
-  <!-- Footer (optional) -->
-  <footer class="mt-auto border-t border-primary bg-surface">
+  <!-- Footer -->
+  <footer class="mt-auto transition-all duration-300"
+          style="border-top: 1px solid var(--border-primary); 
+                 background-color: var(--surface-primary);">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div class="text-center text-sm text-secondary">
-        <p>
-          ระบบรายงานโรค - พัฒนาด้วย SvelteKit 5
-        </p>
+      <div class="text-center text-sm transition-colors duration-300"
+           style="color: var(--text-secondary);">
+        <p>ระบบรายงานโรค - พัฒนาด้วย SvelteKit 5</p>
         <p class="mt-1">
-          Current Theme: <strong class="text-primary">{themeState.theme}</strong>
-          {#if themeState.theme === 'system'}
-            (System: {themeState.systemTheme})
-          {/if}
+          Theme: <strong style="color: var(--text-primary);">{themeState.theme}</strong>
+          | Effective: <strong style="color: var(--primary-500);">{themeState.effectiveTheme}</strong>
         </p>
       </div>
     </div>
@@ -227,65 +193,149 @@
   
 </div>
 
-<!-- ============================================ -->
-<!-- DEVELOPMENT HELPERS -->
-<!-- ============================================ -->
+<!-- Debug Panel -->
 
-{#if mounted}
-  <!-- Theme Debug Info (only in development) -->
-  <div class="fixed bottom-4 left-4 z-50 hidden lg:block">
-    <div class="bg-surface border border-primary rounded-lg p-3 text-xs shadow-lg">
-      <div class="font-semibold text-primary mb-1">Theme Debug:</div>
-      <div class="text-secondary space-y-1">
-        <div>Theme: <span class="text-primary">{themeState.theme}</span></div>
-        <div>Effective: <span class="text-primary">{themeState.effectiveTheme}</span></div>
-        <div>System: <span class="text-primary">{themeState.systemTheme}</span></div>
-        <div>Loading: <span class="text-primary">{themeState.isLoading}</span></div>
-      </div>
-      <div class="mt-2 text-xs text-tertiary">
-        Press <kbd class="px-1 bg-elevated rounded">Ctrl+Shift+D</kbd> to toggle
-      </div>
-    </div>
-  </div>
-{/if}
 
 <!-- ============================================ -->
-<!-- STYLES -->
+<!-- EMBEDDED CSS VARIABLES (EMERGENCY FIX) -->
 <!-- ============================================ -->
 
 <style>
-  /* App-specific styles */
+  /* Don't import Tailwind here - it's already imported in app.css */
+
+  /* CSS Variables - Light Mode (Default) */
+  :global(:root) {
+    /* Background Colors */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --bg-tertiary: #f1f5f9;
+    
+    /* Surface Colors */
+    --surface-primary: #ffffff;
+    --surface-secondary: #f8fafc;
+    --surface-elevated: #ffffff;
+    --surface-hover: #f1f5f9;
+    --surface-active: #e2e8f0;
+    
+    /* Text Colors */
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-tertiary: #64748b;
+    --text-disabled: #94a3b8;
+    --text-inverse: #ffffff;
+    
+    /* Border Colors */
+    --border-primary: #e2e8f0;
+    --border-secondary: #cbd5e1;
+    --border-focus: #3b82f6;
+    
+    /* Brand Colors */
+    --primary-50: #eff6ff;
+    --primary-100: #dbeafe;
+    --primary-500: #3b82f6;
+    --primary-600: #2563eb;
+    --primary-700: #1d4ed8;
+    --primary-800: #1e40af;
+    
+    /* Status Colors */
+    --success: #10b981;
+    --success-bg: #d1fae5;
+    --warning: #f59e0b;
+    --warning-bg: #fef3c7;
+    --error: #ef4444;
+    --error-bg: #fee2e2;
+    --info: #06b6d4;
+    --info-bg: #cffafe;
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+
+  /* CSS Variables - Dark Mode */
+  :global([data-theme="dark"]) {
+    /* Background Colors */
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    
+    /* Surface Colors */
+    --surface-primary: #1e293b;
+    --surface-secondary: #334155;
+    --surface-elevated: #475569;
+    --surface-hover: #475569;
+    --surface-active: #64748b;
+    
+    /* Text Colors */
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-tertiary: #94a3b8;
+    --text-disabled: #64748b;
+    --text-inverse: #0f172a;
+    
+    /* Border Colors */
+    --border-primary: #475569;
+    --border-secondary: #64748b;
+    --border-focus: #60a5fa;
+    
+    /* Brand Colors */
+    --primary-50: #1e293b;
+    --primary-100: #334155;
+    --primary-500: #60a5fa;
+    --primary-600: #3b82f6;
+    --primary-700: #2563eb;
+    --primary-800: #1d4ed8;
+    
+    /* Status Colors */
+    --success: #34d399;
+    --success-bg: #064e3b;
+    --warning: #fbbf24;
+    --warning-bg: #451a03;
+    --error: #f87171;
+    --error-bg: #7f1d1d;
+    --info: #22d3ee;
+    --info-bg: #164e63;
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Base styles */
+  :global(*) {
+    box-sizing: border-box;
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+  }
+
+  :global(html) {
+    font-family: 'Sarabun', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  :global(body) {
+    margin: 0;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+
+  /* Disable transitions during theme switching */
+  :global(.theme-transitioning *) {
+    transition: none !important;
+  }
+
+  /* Focus states */
+  :global(*:focus-visible) {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+  }
+
+  /* App layout */
   .app-layout {
     display: flex;
     flex-direction: column;
     background-color: var(--bg-primary);
     color: var(--text-primary);
-  }
-  
-  /* Header backdrop blur effect */
-  :global(header) {
-    background-color: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(8px);
-  }
-  
-  :global([data-theme="dark"]) :global(header) {
-    background-color: rgba(30, 41, 59, 0.8);
-  }
-  
-  /* Loading indicator animation */
-  @keyframes loading-shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-  }
-  
-  /* Debug panel styling */
-  kbd {
-    font-family: ui-monospace, monospace;
-    font-size: 0.75rem;
-  }
-  
-  /* Smooth transitions for layout elements */
-  header, main, footer {
-    transition: background-color 0.3s ease, border-color 0.3s ease;
   }
 </style>

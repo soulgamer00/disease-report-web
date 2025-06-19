@@ -1,6 +1,6 @@
 /* frontend/src/app.css */
-/* Global styles with proper dark mode support */
-/* ✅ Complete CSS variables system for theme switching */
+/* ✅ FIXED Global styles with proper dark mode support */
+/* Complete CSS variables system for theme switching */
 
 @import 'tailwindcss/base';
 @import 'tailwindcss/components';
@@ -213,76 +213,13 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
   }
 }
 
-/* ============================================ */
-/* COMPONENT STYLES */
-/* ============================================ */
-
-/* Cards */
-.card {
-  background-color: var(--surface-primary);
-  border: 1px solid var(--border-primary);
-  border-radius: 0.75rem;
-  box-shadow: var(--shadow-sm);
-}
-
-.card:hover {
-  box-shadow: var(--shadow-md);
-}
-
-/* Buttons */
-.btn-primary {
-  background-color: var(--primary-600);
-  color: var(--text-inverse);
-  border: 1px solid var(--primary-600);
-}
-
-.btn-primary:hover {
-  background-color: var(--primary-700);
-  border-color: var(--primary-700);
-}
-
-.btn-secondary {
-  background-color: var(--surface-primary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-primary);
-}
-
-.btn-secondary:hover {
-  background-color: var(--surface-hover);
-}
-
-/* Status badges */
-.badge-success {
-  background-color: var(--success-bg);
-  color: var(--success);
-}
-
-.badge-warning {
-  background-color: var(--warning-bg);
-  color: var(--warning);
-}
-
-.badge-error {
-  background-color: var(--error-bg);
-  color: var(--error);
-}
-
-.badge-info {
-  background-color: var(--info-bg);
-  color: var(--info);
-}
-
-/* ============================================ */
-/* PRINT STYLES */
-/* ============================================ */
-
+/* Print styles */
 @media print {
   * {
-    background: white !important;
+    background-color: white !important;
     color: black !important;
     box-shadow: none !important;
   }
