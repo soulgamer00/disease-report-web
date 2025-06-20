@@ -1,6 +1,6 @@
 <!-- frontend/src/lib/components/dashboard/DashboardNav.svelte -->
-<!-- ✅ Role-based navigation menu for dashboard -->
-<!-- Dynamic menu based on user permissions with modern styling -->
+<!-- ✅ Fixed infinite loop issues in navigation -->
+<!-- Separated effects and simplified state management -->
 
 <script lang="ts">
   import { page } from '$app/stores';
@@ -11,7 +11,7 @@
   import { authAPI } from '$lib/api/auth.api';
   import { themeStore } from '$lib/stores/theme.store';
   
-  // Lucide icons from svelte-lucide (v2.x for Svelte 5)
+  // Lucide icons
   import { 
     ChevronDown, 
     ChevronRight, 
@@ -23,16 +23,16 @@
     LayoutDashboard,
     Users,
     Building2,
-    Activity,      // แทน Virus
-    ChartBar,      // แทน BarChart3
+    Activity,
+    ChartBar,
     FileText,
     List,
-    Plus,          // แทน PlusCircle
+    Plus,
     History,
     TrendingUp,
-    ChartPie,      // แทน PieChart
+    ChartPie,
     Download,
-    UsersRound     // แทน Users2
+    UsersRound
   } from 'svelte-lucide';
   
   // ============================================
@@ -46,14 +46,8 @@
   let { isCollapsed = false }: Props = $props();
   
   // ============================================
-  // REACTIVE STATE
+  // REACTIVE STATE - แยกให้ชัดเจน
   // ============================================
-  
-  // User and theme state
-  let userState = $state($userStore);
-  let displayInfo = $state($userDisplay);
-  let permissions = $state($userPermissions);
-  let currentTheme = $state($themeStore);
   
   // Navigation state
   let menuSections = $state<MenuSection[]>([]);
@@ -62,33 +56,44 @@
   let isUserMenuOpen = $state<boolean>(false);
   let isLoggingOut = $state<boolean>(false);
   
-  // Current route tracking
-  let currentRoute = $state<string>('');
-  
   // ============================================
-  // REACTIVE UPDATES
+  // DERIVED STATE - ใช้ $derived แทน effects
   // ============================================
   
-  $effect(() => {
-    userState = $userStore;
-    displayInfo = $userDisplay;
-    permissions = $userPermissions;
-    currentTheme = $themeStore;
-    
-    // Update menu when user changes
+  // User state - derived from stores (read-only)
+  let userState = $derived($userStore);
+  let displayInfo = $derived($userDisplay);
+  let permissions = $derived($userPermissions);
+  let currentTheme = $derived($themeStore);
+  
+  // Current route - derived from page store
+  let currentRoute = $derived($page.url.pathname);
+  
+  // Menu sections based on user role - derived
+  let availableMenuSections = $derived.by(() => {
     if (userState.user?.userRoleId) {
-      menuSections = getActiveMenuSections(userState.user.userRoleId);
-      
-      // Auto-expand first section
-      if (menuSections.length > 0 && expandedSections.size === 0) {
-        expandedSections.add(menuSections[0].id);
-        expandedSections = new Set(expandedSections); // Trigger reactivity
-      }
+      return getActiveMenuSections(userState.user.userRoleId);
     }
+    return [];
   });
   
+  // ============================================
+  // SINGLE EFFECT FOR MENU INITIALIZATION
+  // ============================================
+  
+  // Initialize menu when available sections change
   $effect(() => {
-    currentRoute = $page.url.pathname;
+    if (availableMenuSections.length > 0) {
+      menuSections = availableMenuSections;
+      
+      // Auto-expand first section only once
+      if (expandedSections.size === 0) {
+        const firstSection = availableMenuSections[0];
+        if (firstSection) {
+          expandedSections = new Set([firstSection.id]);
+        }
+      }
+    }
   });
   
   // ============================================
@@ -96,12 +101,15 @@
   // ============================================
   
   function toggleSection(sectionId: string): void {
-    if (expandedSections.has(sectionId)) {
-      expandedSections.delete(sectionId);
+    const newSet = new Set(expandedSections);
+    
+    if (newSet.has(sectionId)) {
+      newSet.delete(sectionId);
     } else {
-      expandedSections.add(sectionId);
+      newSet.add(sectionId);
     }
-    expandedSections = new Set(expandedSections); // Trigger reactivity
+    
+    expandedSections = newSet;
   }
   
   function handleMenuItemClick(item: MenuItem): void {
@@ -162,6 +170,26 @@
     goto('/settings');
   }
   
+  function getMenuIcon(iconName: string) {
+    const iconMap = {
+      'layout-dashboard': LayoutDashboard,
+      'users': Users,
+      'building-2': Building2,
+      'activity': Activity,
+      'chart-bar': ChartBar,
+      'file-text': FileText,
+      'list': List,
+      'plus': Plus,
+      'history': History,
+      'trending-up': TrendingUp,
+      'chart-pie': ChartPie,
+      'download': Download,
+      'users-round': UsersRound,
+    };
+    
+    return iconMap[iconName as keyof typeof iconMap] || Activity;
+  }
+  
   // ============================================
   // LIFECYCLE
   // ============================================
@@ -180,252 +208,97 @@
 <!-- NAVIGATION COMPONENT -->
 <!-- ============================================ -->
 
-<nav class="dashboard-nav h-full flex flex-col" 
-     style="background-color: var(--surface-primary); border-right: 1px solid var(--border-primary);">
-  
-  <!-- Header Section -->
+<nav class="dashboard-nav h-full flex flex-col border-r"
+     style="background-color: var(--surface-primary); border-color: var(--border-primary);"
+     class:collapsed={isCollapsed}>
+
+  <!-- Navigation Header -->
   <div class="nav-header p-4 border-b" style="border-color: var(--border-primary);">
-    
-    <!-- Mobile Menu Toggle -->
-    <div class="flex items-center justify-between lg:justify-center">
-      <button 
-        class="lg:hidden p-2 rounded-lg hover:bg-opacity-10"
-        style="color: var(--text-primary); background-color: var(--surface-hover);"
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center"
+             style="background-color: var(--accent-primary); color: var(--surface-primary);">
+          <Activity size="20" />
+        </div>
+        {#if !isCollapsed}
+          <div>
+            <div class="font-semibold text-sm" style="color: var(--text-primary);">
+              ระบบรายงานโรค
+            </div>
+            <div class="text-xs" style="color: var(--text-secondary);">
+              Disease Report System
+            </div>
+          </div>
+        {/if}
+      </div>
+      
+      <!-- Mobile menu toggle -->
+      <button
         onclick={toggleMobileMenu}
-        aria-label="Toggle menu"
+        class="lg:hidden p-1 rounded"
+        style="color: var(--text-secondary);"
       >
         {#if isMobileMenuOpen}
-          <X size="24" />
+          <X size="20" />
         {:else}
-          <Menu size="24" />
+          <Menu size="20" />
         {/if}
       </button>
-      
-      <!-- Logo/Title -->
-      <div class="flex items-center gap-3" class:hidden={isCollapsed}>
-        <div class="w-8 h-8 rounded-lg flex items-center justify-center"
-             style="background-color: var(--primary-500); color: white;">
-          <span class="font-bold text-sm">DR</span>
-        </div>
-        <div class="hidden lg:block">
-          <h1 class="font-semibold text-lg" style="color: var(--text-primary);">
-            Disease Report
-          </h1>
-          <p class="text-xs" style="color: var(--text-secondary);">
-            ระบบรายงานโรค
-          </p>
-        </div>
-      </div>
     </div>
   </div>
-  
-  <!-- User Info Section -->
-  {#if displayInfo}
-    <div class="user-info p-4 border-b" style="border-color: var(--border-primary);">
-      <div class="user-menu-container relative">
-        <button 
-          class="w-full flex items-center gap-3 p-2 rounded-lg transition-colors"
-          style="color: var(--text-primary);"
-          class:bg-opacity-10={isUserMenuOpen}
-          style:background-color={isUserMenuOpen ? 'var(--surface-hover)' : 'transparent'}
-          onclick={toggleUserMenu}
-        >
-          <!-- Avatar -->
-          <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold"
-               style="background-color: var(--primary-100); color: var(--primary-600);">
-            {displayInfo.initials}
-          </div>
-          
-          <!-- User Details -->
-          <div class="flex-1 text-left" class:hidden={isCollapsed}>
-            <div class="font-medium text-sm truncate">
-              {displayInfo.fullName}
-            </div>
-            <div class="text-xs opacity-70 truncate">
-              {displayInfo.roleName}
-            </div>
-          </div>
-          
-          <!-- Dropdown Arrow -->
-          <div 
-            class="w-4 h-4 transition-transform flex items-center justify-center"
-            class:rotate-180={isUserMenuOpen}
-            class:hidden={isCollapsed}
-          >
-            <ChevronDown size="16" />
-          </div>
-        </button>
-        
-        <!-- User Dropdown Menu -->
-        {#if isUserMenuOpen && !isCollapsed}
-          <div class="absolute top-full left-0 right-0 mt-2 py-2 rounded-lg shadow-lg z-50"
-               style="background-color: var(--surface-primary); border: 1px solid var(--border-primary);">
-            
-            <!-- Hospital Info -->
-            <div class="px-3 py-2 border-b" style="border-color: var(--border-primary);">
-              <div class="text-xs opacity-60" style="color: var(--text-secondary);">
-                โรงพยาบาล
-              </div>
-              <div class="text-sm font-medium truncate" style="color: var(--text-primary);">
-                {displayInfo.hospitalName}
-              </div>
-            </div>
-            
-            <!-- Menu Items -->
-            <button 
-              class="w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
-              style="color: var(--text-primary);"
-              onclick={handleProfileClick}
-            >
-              <User size="16" />
-              <span>ข้อมูลโปรไฟล์</span>
-            </button>
-            
-            {#if permissions.isSuperadmin}
-              <button 
-                class="w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
-                style="color: var(--text-primary);"
-                onclick={handleSettingsClick}
-              >
-                <Settings size="16" />
-                <span>ตั้งค่าระบบ</span>
-              </button>
-            {/if}
-            
-            <hr class="my-1" style="border-color: var(--border-primary);">
-            
-            <button 
-              class="w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
-              style="color: var(--error-600);"
-              onclick={handleLogout}
-              disabled={isLoggingOut}
-            >
-              <LogOut size="16" />
-              <span>{isLoggingOut ? 'กำลังออกจากระบบ...' : 'ออกจากระบบ'}</span>
-            </button>
-          </div>
-        {/if}
-      </div>
-    </div>
-  {/if}
-  
+
   <!-- Navigation Menu -->
-  <div class="nav-menu flex-1 overflow-y-auto p-4 space-y-2">
-    
-    <!-- Mobile Overlay -->
-    {#if isMobileMenuOpen}
-      <button
-        class="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40"
-        onclick={toggleMobileMenu}
-        aria-label="Close mobile menu"
-        type="button"
-      ></button>
-    {/if}
-    
-    <!-- Menu Sections -->
-    <div 
-      class="space-y-4 lg:block"
-      class:hidden={!isMobileMenuOpen}
-      style:transform={isMobileMenuOpen ? 'translateX(0)' : 'translateX(-100%)'}
-    >
-      {#each menuSections as section (section.id)}
-        <div class="menu-section">
+  <div class="nav-menu flex-1 overflow-y-auto p-2">
+    {#if menuSections.length > 0}
+      {#each menuSections as section}
+        <div class="menu-section mb-2">
           
           <!-- Section Header -->
-          <button 
-            class="w-full flex items-center justify-between p-2 rounded-lg text-sm font-medium transition-colors"
-            style="color: var(--text-secondary);"
+          <button
             onclick={() => toggleSection(section.id)}
-            class:hidden={isCollapsed}
+            class="section-header w-full flex items-center justify-between p-2 rounded-lg transition-colors hover:bg-opacity-50"
+            style="background-color: var(--surface-secondary); color: var(--text-secondary);"
           >
-            <span>{section.title}</span>
-            <div 
-              class="w-4 h-4 transition-transform flex items-center justify-center"
-              class:rotate-90={expandedSections.has(section.id)}
-            >
-              <ChevronRight size="16" />
-            </div>
+            <span class="text-xs font-medium uppercase tracking-wide">
+              {#if !isCollapsed}
+                {section.title}
+              {:else}
+                {section.title.charAt(0)}
+              {/if}
+            </span>
+            {#if !isCollapsed}
+              {#if expandedSections.has(section.id)}
+                <ChevronDown size="14" />
+              {:else}
+                <ChevronRight size="14" />
+              {/if}
+            {/if}
           </button>
           
           <!-- Section Items -->
-          {#if expandedSections.has(section.id) || isCollapsed}
-            <div class="menu-items space-y-1 mt-2" class:mt-0={isCollapsed}>
-              {#each section.items as item (item.id)}
+          {#if expandedSections.has(section.id)}
+            <div class="section-items mt-1 space-y-1">
+              {#each section.items as item}
+                {@const IconComponent = getMenuIcon(item.icon)}
                 <button
-                  class="w-full flex items-center gap-3 p-3 rounded-lg text-sm transition-colors group relative"
-                  style="color: var(--text-primary);"
-                  style:background-color={isActiveRoute(item.route) ? 'var(--primary-100)' : 'transparent'}
-                  style:color={isActiveRoute(item.route) ? 'var(--primary-600)' : 'var(--text-primary)'}
                   onclick={() => handleMenuItemClick(item)}
-                  title={isCollapsed ? item.title : item.description}
-                  type="button"
+                  class="menu-item w-full flex items-center gap-3 p-2 rounded-lg transition-all"
+                  class:active={isActiveRoute(item.route)}
+                  style={isActiveRoute(item.route) 
+                    ? `background-color: var(--accent-primary); color: var(--surface-primary);`
+                    : `color: var(--text-primary); background-color: transparent;`}
+                  title={isCollapsed ? item.title : ''}
                 >
-                  <!-- Icon -->
-                  <div class="flex-shrink-0 w-5 h-5 flex items-center justify-center">
-                    <!-- Dynamic Lucide icon based on item.icon -->
-                    {#if item.icon === 'layout-dashboard'}
-                      <LayoutDashboard size="18" />
-                    {:else if item.icon === 'users'}
-                      <Users size="18" />
-                    {:else if item.icon === 'building-2'}
-                      <Building2 size="18" />
-                    {:else if item.icon === 'virus'}
-                      <Activity size="18" />
-                    {:else if item.icon === 'bar-chart-3'}
-                      <ChartBar size="18" />
-                    {:else if item.icon === 'file-text'}
-                      <FileText size="18" />
-                    {:else if item.icon === 'list'}
-                      <List size="18" />
-                    {:else if item.icon === 'plus-circle'}
-                      <Plus size="18" />
-                    {:else if item.icon === 'history'}
-                      <History size="18" />
-                    {:else if item.icon === 'trending-up'}
-                      <TrendingUp size="18" />
-                    {:else if item.icon === 'pie-chart'}
-                      <ChartPie size="18" />
-                    {:else if item.icon === 'download'}
-                      <Download size="18" />
-                    {:else if item.icon === 'users-2'}
-                      <UsersRound size="18" />
-                    {:else if item.icon === 'settings'}
-                      <Settings size="18" />
-                    {:else if item.icon === 'user-circle'}
-                      <User size="18" />
-                    {:else if item.icon === 'stethoscope'}
-                      <div class="w-4 h-4 border-2 border-current rounded-full relative">
-                        <div class="absolute top-1 left-1 w-1 h-1 bg-current rounded-full"></div>
-                      </div>
-                    {:else if item.icon === 'clipboard-list'}
-                      <div class="w-4 h-4 border-2 border-current rounded-sm relative">
-                        <div class="absolute top-1 left-1 right-1 h-0.5 bg-current"></div>
-                        <div class="absolute top-2 left-1 right-1 h-0.5 bg-current"></div>
-                        <div class="absolute top-3 left-1 right-1 h-0.5 bg-current"></div>
-                      </div>
-                    {:else}
-                      <!-- Fallback icon -->
-                      <div class="w-4 h-4 border-2 border-current rounded"></div>
-                    {/if}
-                  </div>
-                  
-                  <!-- Label -->
-                  <span class="truncate" class:hidden={isCollapsed}>
-                    {item.title}
-                  </span>
-                  
-                  <!-- Badge -->
-                  {#if item.badge && !isCollapsed}
-                    <div class="ml-auto px-2 py-0.5 rounded-full text-xs"
-                         style="background-color: var(--primary-100); color: var(--primary-600);">
-                      {item.badge}
-                    </div>
+                  <IconComponent size="18" />
+                  {#if !isCollapsed}
+                    <span class="text-sm font-medium">{item.title}</span>
                   {/if}
                   
-                  <!-- Active Indicator -->
-                  {#if isActiveRoute(item.route)}
-                    <div class="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-6 rounded-r"
-                         style="background-color: var(--primary-500);"></div>
+                  {#if item.badge && !isCollapsed}
+                    <span class="ml-auto px-2 py-1 text-xs rounded-full"
+                          style="background-color: var(--error); color: var(--surface-primary);">
+                      {item.badge}
+                    </span>
                   {/if}
                 </button>
               {/each}
@@ -433,29 +306,88 @@
           {/if}
         </div>
       {/each}
-    </div>
+    {:else}
+      <!-- Loading state -->
+      <div class="text-center py-8" style="color: var(--text-secondary);">
+        <div class="animate-pulse">
+          <Activity size="24" class="mx-auto mb-2 opacity-50" />
+          <p class="text-sm">กำลังโหลดเมนู...</p>
+        </div>
+      </div>
+    {/if}
   </div>
-  
-  <!-- Footer Section -->
-  <div class="nav-footer p-4 border-t" style="border-color: var(--border-primary);">
-    <!-- Theme Toggle -->
-    <button 
-      class="w-full flex items-center gap-3 p-2 rounded-lg text-sm transition-colors"
-      style="color: var(--text-secondary);"
-      onclick={() => themeStore.toggle()}
-      title="เปลี่ยนธีม"
-    >
-      <div class="w-5 h-5 flex items-center justify-center">
-        {#if currentTheme.effectiveTheme === 'dark'}
-          🌙
+
+  <!-- User Profile Section -->
+  <div class="nav-footer border-t p-4" style="border-color: var(--border-primary);">
+    
+    <!-- User Info -->
+    {#if displayInfo}
+      <div class="user-info mb-3">
+        {#if !isCollapsed}
+          <div class="text-sm font-medium truncate" style="color: var(--text-primary);">
+            {displayInfo.fullName}
+          </div>
+          <div class="text-xs truncate" style="color: var(--text-secondary);">
+            {displayInfo.roleName}
+            {#if displayInfo.hospitalName}
+              • {displayInfo.hospitalName}
+            {/if}
+          </div>
         {:else}
-          ☀️
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
+               style="background-color: var(--accent-primary); color: var(--surface-primary);">
+            {displayInfo.fullName.charAt(0)}
+          </div>
         {/if}
       </div>
-      <span class:hidden={isCollapsed}>
-        {currentTheme.effectiveTheme === 'dark' ? 'โหมดมืด' : 'โหมดสว่าง'}
-      </span>
-    </button>
+    {/if}
+    
+    <!-- User Actions -->
+    <div class="user-actions space-y-2">
+      
+      <!-- Profile Button -->
+      <button
+        onclick={handleProfileClick}
+        class="w-full flex items-center gap-3 p-2 rounded-lg transition-colors"
+        style="color: var(--text-secondary); background-color: transparent;"
+        title={isCollapsed ? 'โปรไฟล์' : ''}
+      >
+        <User size="16" />
+        {#if !isCollapsed}
+          <span class="text-sm">โปรไฟล์</span>
+        {/if}
+      </button>
+      
+      <!-- Settings Button -->
+      <button
+        onclick={handleSettingsClick}
+        class="w-full flex items-center gap-3 p-2 rounded-lg transition-colors"
+        style="color: var(--text-secondary); background-color: transparent;"
+        title={isCollapsed ? 'ตั้งค่า' : ''}
+      >
+        <Settings size="16" />
+        {#if !isCollapsed}
+          <span class="text-sm">ตั้งค่า</span>
+        {/if}
+      </button>
+      
+      <!-- Logout Button -->
+      <button
+        onclick={handleLogout}
+        disabled={isLoggingOut}
+        class="w-full flex items-center gap-3 p-2 rounded-lg transition-colors"
+        style="color: var(--error); background-color: transparent;"
+        title={isCollapsed ? 'ออกจากระบบ' : ''}
+      >
+        <LogOut size="16" />
+        {#if !isCollapsed}
+          <span class="text-sm">
+            {isLoggingOut ? 'กำลังออก...' : 'ออกจากระบบ'}
+          </span>
+        {/if}
+      </button>
+      
+    </div>
   </div>
 </nav>
 
@@ -469,8 +401,20 @@
     transition: width 0.3s ease;
   }
   
-  .menu-items button:hover {
+  .dashboard-nav.collapsed {
+    width: 80px;
+  }
+  
+  .menu-item:hover {
     background-color: var(--surface-hover) !important;
+  }
+  
+  .menu-item.active {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  
+  .user-actions button:hover {
+    background-color: var(--surface-secondary) !important;
   }
   
   @media (max-width: 1024px) {
@@ -482,6 +426,10 @@
       z-index: 50;
       transform: translateX(-100%);
       transition: transform 0.3s ease;
+    }
+    
+    .dashboard-nav.mobile-open {
+      transform: translateX(0);
     }
   }
   
@@ -501,5 +449,19 @@
   
   .nav-menu::-webkit-scrollbar-thumb:hover {
     background: var(--text-secondary);
+  }
+  
+  /* Loading animation */
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+  
+  .animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
 </style>

@@ -19,7 +19,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
   
   if (accessToken || refreshToken) {
     // User appears to be logged in, redirect to intended page
-    const redirectTo = url.searchParams.get('redirect') || '/dashboard';
+    const redirectTo = url.searchParams.get('redirect') || '/patients';
     throw redirect(302, redirectTo);
   }
   
@@ -27,7 +27,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
   return {
     title: 'เข้าสู่ระบบ',
     // Pass any server-side data needed for the login page
-    redirectTo: url.searchParams.get('redirect') || '/dashboard',
+    redirectTo: url.searchParams.get('redirect') || '/patients',
     logoutSuccess: url.searchParams.get('logout') === 'success'
   };
 };
