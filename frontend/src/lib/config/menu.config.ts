@@ -1,6 +1,7 @@
 // frontend/src/lib/config/menu.config.ts
 // Menu configuration for role-based dashboard
 // ✅ Type-safe menu system with role permissions
+// ✅ เพิ่ม Hospital Management เข้าไปแล้ว
 
 import type { UserRoleId } from '$lib/types/auth.types';
 
@@ -112,17 +113,18 @@ export const SUPERADMIN_MENU: MenuSection[] = [
         title: 'จัดการผู้ใช้งาน',
         icon: MENU_ICONS.users,
         route: '/admin/users',
-        description: 'จัดการผู้ใช้ทุก Role',
+        description: 'จัดการบัญชีผู้ใช้งาน',
         requiredRole: 1,
         isActive: true,
       },
+      // ✅ เพิ่ม Hospital Management ใหม่
       {
         id: 'manage-hospitals',
         title: 'จัดการโรงพยาบาล',
         icon: MENU_ICONS.hospitals,
-        route: '/admin/hospitals',
+        route: '/hospitals',
         description: 'จัดการข้อมูลโรงพยาบาล',
-        requiredRole: 1,
+        requiredRole: 1, // Superadmin only
         isActive: true,
       },
       {
@@ -130,66 +132,84 @@ export const SUPERADMIN_MENU: MenuSection[] = [
         title: 'จัดการโรค',
         icon: MENU_ICONS.diseases,
         route: '/admin/diseases',
-        description: 'จัดการโรคและอาการ',
+        description: 'จัดการประเภทโรคและอาการ',
         requiredRole: 1,
         isActive: true,
       },
       {
-        id: 'manage-population',
+        id: 'manage-populations',
         title: 'จัดการข้อมูลประชากร',
         icon: MENU_ICONS.population,
-        route: '/admin/population',
-        description: 'จัดการข้อมูลประชากรทุกโรงพยาบาล',
+        route: '/admin/populations',
+        description: 'จัดการข้อมูลประชากรตามพื้นที่',
         requiredRole: 1,
         isActive: true,
       },
     ],
   },
   {
-    id: 'patients',
-    title: 'การจัดการผู้ป่วย',
+    id: 'data-entry',
+    title: 'การบันทึกข้อมูล',
     order: 3,
     items: [
       {
-        id: 'all-patients',
-        title: 'ผู้ป่วยทุกโรงพยาบาล',
-        icon: MENU_ICONS.patientList,
-        route: '/patients/all',
-        description: 'ดูข้อมูลผู้ป่วยทุกโรงพยาบาล',
+        id: 'add-patient',
+        title: 'เพิ่มข้อมูลผู้ป่วย',
+        icon: MENU_ICONS.patientAdd,
+        route: '/patients/add',
+        description: 'บันทึกรายงานผู้ป่วยใหม่',
         requiredRole: 1,
         isActive: true,
       },
       {
-        id: 'patient-analytics',
-        title: 'วิเคราะห์ข้อมูลผู้ป่วย',
-        icon: MENU_ICONS.analytics,
-        route: '/patients/analytics',
-        description: 'วิเคราะห์แนวโน้มและสถิติ',
+        id: 'patient-list',
+        title: 'รายการผู้ป่วย',
+        icon: MENU_ICONS.patientList,
+        route: '/patients',
+        description: 'ดูรายการผู้ป่วยทั้งหมด',
+        requiredRole: 1,
+        isActive: true,
+      },
+      {
+        id: 'patient-history',
+        title: 'ประวัติผู้ป่วย',
+        icon: MENU_ICONS.patientHistory,
+        route: '/patients/history',
+        description: 'ค้นหาประวัติการรักษา',
         requiredRole: 1,
         isActive: true,
       },
     ],
   },
   {
-    id: 'settings',
-    title: 'การตั้งค่า',
+    id: 'reports',
+    title: 'รายงานและสถิติ',
     order: 4,
     items: [
       {
-        id: 'system-settings',
-        title: 'ตั้งค่าระบบ',
-        icon: MENU_ICONS.settings,
-        route: '/admin/settings',
-        description: 'ตั้งค่าระบบทั่วไป',
+        id: 'analytics-dashboard',
+        title: 'วิเคราะห์ข้อมูล',
+        icon: MENU_ICONS.analytics,
+        route: '/reports/analytics',
+        description: 'วิเคราะห์แนวโน้มโรค',
         requiredRole: 1,
         isActive: true,
       },
       {
-        id: 'profile',
-        title: 'ข้อมูลส่วนตัว',
-        icon: MENU_ICONS.profile,
-        route: '/profile',
-        description: 'จัดการข้อมูลโปรไฟล์',
+        id: 'statistics-report',
+        title: 'สถิติรายงาน',
+        icon: MENU_ICONS.statistics,
+        route: '/reports/statistics',
+        description: 'สถิติการรายงานโรค',
+        requiredRole: 1,
+        isActive: true,
+      },
+      {
+        id: 'export-data',
+        title: 'ส่งออกข้อมูล',
+        icon: MENU_ICONS.export,
+        route: '/reports/export',
+        description: 'ส่งออกข้อมูลเป็น Excel',
         requiredRole: 1,
         isActive: true,
       },
@@ -198,12 +218,12 @@ export const SUPERADMIN_MENU: MenuSection[] = [
 ];
 
 /**
- * ADMIN Menu Items - Hospital Level Management
+ * ADMIN Menu Items - Hospital Management
  */
 export const ADMIN_MENU: MenuSection[] = [
   {
     id: 'overview',
-    title: 'ภาพรวมโรงพยาบาล',
+    title: 'ภาพรวม',
     order: 1,
     items: [
       {
@@ -215,15 +235,6 @@ export const ADMIN_MENU: MenuSection[] = [
         requiredRole: 2,
         isActive: true,
       },
-      {
-        id: 'hospital-reports',
-        title: 'รายงานโรงพยาบาล',
-        icon: MENU_ICONS.reports,
-        route: '/reports/hospital',
-        description: 'รายงานสถิติโรงพยาบาลตัวเอง',
-        requiredRole: 2,
-        isActive: true,
-      },
     ],
   },
   {
@@ -232,39 +243,40 @@ export const ADMIN_MENU: MenuSection[] = [
     order: 2,
     items: [
       {
-        id: 'manage-staff',
-        title: 'จัดการเจ้าหน้าที่',
+        id: 'manage-users-hospital',
+        title: 'จัดการผู้ใช้งาน',
         icon: MENU_ICONS.users,
-        route: '/admin/staff',
-        description: 'จัดการผู้ใช้ในโรงพยาบาล',
+        route: '/admin/users',
+        description: 'จัดการผู้ใช้งานในโรงพยาบาล',
         requiredRole: 2,
         isActive: true,
       },
+      // ✅ Admin สามารถดู Hospital Management ได้แต่ไม่สามารถแก้ไขได้
       {
-        id: 'manage-hospital-data',
-        title: 'จัดการข้อมูลโรงพยาบาล',
-        icon: MENU_ICONS.hospitalData,
-        route: '/admin/hospital-data',
-        description: 'จัดการข้อมูลโรงพยาบาลตัวเอง',
-        requiredRole: 2,
-        isActive: true,
-      },
-      {
-        id: 'manage-population-local',
-        title: 'จัดการข้อมูลประชากร',
-        icon: MENU_ICONS.population,
-        route: '/admin/population/local',
-        description: 'จัดการข้อมูลประชากรโรงพยาบาลตัวเอง',
-        requiredRole: 2,
+        id: 'view-hospitals',
+        title: 'ข้อมูลโรงพยาบาล',
+        icon: MENU_ICONS.hospitals,
+        route: '/hospitals',
+        description: 'ดูข้อมูลโรงพยาบาลทั้งหมด',
+        requiredRole: 2, // Admin can view
         isActive: true,
       },
     ],
   },
   {
-    id: 'patients',
-    title: 'การจัดการผู้ป่วย',
+    id: 'data-entry',
+    title: 'การบันทึกข้อมูล',
     order: 3,
     items: [
+      {
+        id: 'add-patient',
+        title: 'เพิ่มข้อมูลผู้ป่วย',
+        icon: MENU_ICONS.patientAdd,
+        route: '/patients/add',
+        description: 'บันทึกรายงานผู้ป่วยใหม่',
+        requiredRole: 2,
+        isActive: true,
+      },
       {
         id: 'patient-list',
         title: 'รายการผู้ป่วย',
@@ -275,36 +287,36 @@ export const ADMIN_MENU: MenuSection[] = [
         isActive: true,
       },
       {
-        id: 'add-patient',
-        title: 'เพิ่มรายงานผู้ป่วย',
-        icon: MENU_ICONS.patientAdd,
-        route: '/patients/add',
-        description: 'บันทึกข้อมูลผู้ป่วยใหม่',
-        requiredRole: 2,
-        isActive: true,
-      },
-      {
         id: 'patient-history',
         title: 'ประวัติผู้ป่วย',
         icon: MENU_ICONS.patientHistory,
         route: '/patients/history',
-        description: 'ค้นหาประวัติผู้ป่วย',
+        description: 'ค้นหาประวัติการรักษา',
         requiredRole: 2,
         isActive: true,
       },
     ],
   },
   {
-    id: 'profile',
-    title: 'ข้อมูลส่วนตัว',
+    id: 'reports',
+    title: 'รายงาน',
     order: 4,
     items: [
       {
-        id: 'profile',
-        title: 'ข้อมูลโปรไฟล์',
-        icon: MENU_ICONS.profile,
-        route: '/profile',
-        description: 'จัดการข้อมูลส่วนตัว',
+        id: 'hospital-reports',
+        title: 'รายงานโรงพยาบาล',
+        icon: MENU_ICONS.reports,
+        route: '/reports/hospital',
+        description: 'รายงานสถิติโรงพยาบาล',
+        requiredRole: 2,
+        isActive: true,
+      },
+      {
+        id: 'export-data',
+        title: 'ส่งออกข้อมูล',
+        icon: MENU_ICONS.export,
+        route: '/reports/export',
+        description: 'ส่งออกข้อมูลเป็น Excel',
         requiredRole: 2,
         isActive: true,
       },
@@ -313,7 +325,7 @@ export const ADMIN_MENU: MenuSection[] = [
 ];
 
 /**
- * USER Menu Items - Basic Operations
+ * USER Menu Items - Data Entry Only
  */
 export const USER_MENU: MenuSection[] = [
   {
@@ -326,47 +338,38 @@ export const USER_MENU: MenuSection[] = [
         title: 'แดชบอร์ด',
         icon: MENU_ICONS.dashboard,
         route: '/dashboard',
-        description: 'ภาพรวมข้อมูลพื้นฐาน',
-        requiredRole: 3,
-        isActive: true,
-      },
-      {
-        id: 'my-reports',
-        title: 'รายงานของฉัน',
-        icon: MENU_ICONS.reports,
-        route: '/reports/my',
-        description: 'รายงานที่ฉันสร้าง',
+        description: 'ภาพรวมข้อมูลการทำงาน',
         requiredRole: 3,
         isActive: true,
       },
     ],
   },
   {
-    id: 'patients',
-    title: 'การจัดการผู้ป่วย',
+    id: 'data-entry',
+    title: 'การบันทึกข้อมูล',
     order: 2,
     items: [
+      {
+        id: 'add-patient',
+        title: 'เพิ่มข้อมูลผู้ป่วย',
+        icon: MENU_ICONS.patientAdd,
+        route: '/patients/add',
+        description: 'บันทึกรายงานผู้ป่วยใหม่',
+        requiredRole: 3,
+        isActive: true,
+      },
       {
         id: 'patient-list',
         title: 'รายการผู้ป่วย',
         icon: MENU_ICONS.patientList,
         route: '/patients',
-        description: 'ดูรายการผู้ป่วยในโรงพยาบาล',
-        requiredRole: 3,
-        isActive: true,
-      },
-      {
-        id: 'add-patient',
-        title: 'เพิ่มรายงานผู้ป่วย',
-        icon: MENU_ICONS.patientAdd,
-        route: '/patients/add',
-        description: 'บันทึกข้อมูลผู้ป่วยใหม่',
+        description: 'ดูรายการผู้ป่วยของฉัน',
         requiredRole: 3,
         isActive: true,
       },
       {
         id: 'patient-history',
-        title: 'ค้นหาประวัติผู้ป่วย',
+        title: 'ประวัติผู้ป่วย',
         icon: MENU_ICONS.patientHistory,
         route: '/patients/history',
         description: 'ค้นหาประวัติการรักษา',
@@ -381,27 +384,20 @@ export const USER_MENU: MenuSection[] = [
     order: 3,
     items: [
       {
+        id: 'my-reports',
+        title: 'รายงานของฉัน',
+        icon: MENU_ICONS.reports,
+        route: '/reports/my',
+        description: 'รายงานที่ฉันสร้าง',
+        requiredRole: 3,
+        isActive: true,
+      },
+      {
         id: 'export-data',
         title: 'ส่งออกข้อมูล',
         icon: MENU_ICONS.export,
         route: '/reports/export',
-        description: 'ส่งออกข้อมูลเป็น Excel',
-        requiredRole: 3,
-        isActive: true,
-      },
-    ],
-  },
-  {
-    id: 'profile',
-    title: 'ข้อมูลส่วนตัว',
-    order: 4,
-    items: [
-      {
-        id: 'profile',
-        title: 'ข้อมูลโปรไฟล์',
-        icon: MENU_ICONS.profile,
-        route: '/profile',
-        description: 'จัดการข้อมูลส่วนตัว',
+        description: 'ส่งออกข้อมูลของฉัน',
         requiredRole: 3,
         isActive: true,
       },
@@ -410,19 +406,19 @@ export const USER_MENU: MenuSection[] = [
 ];
 
 // ============================================
-// MENU UTILITIES
+// MENU CONFIGURATION FUNCTIONS
 // ============================================
 
 /**
- * Get menu items for specific role
+ * Get menu sections based on user role
  */
-export function getMenuForRole(roleId: UserRoleId): MenuSection[] {
-  switch (roleId) {
-    case 1:
+export function getActiveMenuSections(userRoleId: UserRoleId): MenuSection[] {
+  switch (userRoleId) {
+    case 1: // Superadmin
       return SUPERADMIN_MENU;
-    case 2:
+    case 2: // Admin  
       return ADMIN_MENU;
-    case 3:
+    case 3: // User
       return USER_MENU;
     default:
       return USER_MENU; // Default to most restrictive
@@ -430,39 +426,91 @@ export function getMenuForRole(roleId: UserRoleId): MenuSection[] {
 }
 
 /**
- * Get all menu items (flat array) for specific role
+ * Check if user has access to menu item
  */
-export function getMenuItemsForRole(roleId: UserRoleId): MenuItem[] {
-  const menuSections = getMenuForRole(roleId);
-  return menuSections.flatMap(section => section.items);
+export function canAccessMenuItem(item: MenuItem, userRoleId: UserRoleId): boolean {
+  return userRoleId <= item.requiredRole;
 }
 
 /**
- * Check if user has access to specific menu item
+ * Get flattened list of all menu items for a role
  */
-export function hasMenuAccess(userRoleId: UserRoleId, menuItemId: string): boolean {
-  const menuItems = getMenuItemsForRole(userRoleId);
-  const menuItem = menuItems.find(item => item.id === menuItemId);
-  return !!menuItem && menuItem.isActive && userRoleId <= menuItem.requiredRole;
+export function getFlatMenuItems(userRoleId: UserRoleId): MenuItem[] {
+  const sections = getActiveMenuSections(userRoleId);
+  return sections.flatMap(section => section.items);
 }
 
 /**
- * Get menu item by ID for specific role
+ * Find menu item by route
  */
-export function getMenuItemById(roleId: UserRoleId, itemId: string): MenuItem | undefined {
-  const menuItems = getMenuItemsForRole(roleId);
-  return menuItems.find(item => item.id === itemId);
+export function findMenuItemByRoute(route: string, userRoleId: UserRoleId): MenuItem | null {
+  const items = getFlatMenuItems(userRoleId);
+  return items.find(item => item.route === route) || null;
 }
 
 /**
- * Get active menu sections for role (only sections with active items)
+ * Get breadcrumb navigation for current route
  */
-export function getActiveMenuSections(roleId: UserRoleId): MenuSection[] {
-  const menuSections = getMenuForRole(roleId);
-  return menuSections
-    .map(section => ({
-      ...section,
-      items: section.items.filter((item: MenuItem) => item.isActive && roleId <= item.requiredRole),
-    }))
-    .filter(section => section.items.length > 0);
+export function getBreadcrumb(route: string, userRoleId: UserRoleId): Array<{ title: string; route: string }> {
+  const sections = getActiveMenuSections(userRoleId);
+  
+  for (const section of sections) {
+    for (const item of section.items) {
+      if (route.startsWith(item.route)) {
+        return [
+          { title: section.title, route: '#' },
+          { title: item.title, route: item.route }
+        ];
+      }
+    }
+  }
+  
+  return [{ title: 'หน้าหลัก', route: '/dashboard' }];
 }
+
+// ============================================
+// MENU VALIDATION
+// ============================================
+
+/**
+ * Validate menu configuration
+ */
+export function validateMenuConfig(): boolean {
+  const allMenus = [SUPERADMIN_MENU, ADMIN_MENU, USER_MENU];
+  
+  for (const menu of allMenus) {
+    for (const section of menu) {
+      for (const item of section.items) {
+        // Check required fields
+        if (!item.id || !item.title || !item.route || !item.icon) {
+          console.error(`Invalid menu item: ${item.id}`);
+          return false;
+        }
+        
+        // Check role validity
+        if (![1, 2, 3].includes(item.requiredRole)) {
+          console.error(`Invalid role for menu item: ${item.id}`);
+          return false;
+        }
+      }
+    }
+  }
+  
+  return true;
+}
+
+// ============================================
+// EXPORT DEFAULT CONFIGURATION
+// ============================================
+
+export default {
+  SUPERADMIN_MENU,
+  ADMIN_MENU,
+  USER_MENU,
+  getActiveMenuSections,
+  canAccessMenuItem,
+  getFlatMenuItems,
+  findMenuItemByRoute,
+  getBreadcrumb,
+  validateMenuConfig,
+};
