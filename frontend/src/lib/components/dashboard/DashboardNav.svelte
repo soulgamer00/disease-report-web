@@ -428,9 +428,7 @@
       transition: transform 0.3s ease;
     }
     
-    .dashboard-nav.mobile-open {
-      transform: translateX(0);
-    }
+    
   }
   
   /* Custom scrollbar */

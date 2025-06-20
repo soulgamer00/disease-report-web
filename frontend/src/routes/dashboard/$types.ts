@@ -1,5 +1,5 @@
 // frontend/src/routes/dashboard/$types.ts
-// ✅ SIMPLE Dashboard Types - เรียบง่าย ไม่ซับซ้อน
+// ✅ Updated Dashboard Types with user data from cookies
 
 import type { UserInfo } from '$lib/types/auth.types';
 
@@ -19,10 +19,11 @@ export interface SimpleDashboard {
 }
 
 // ============================================
-// LAYOUT DATA
+// LAYOUT DATA - Updated to include user
 // ============================================
 
 export interface LayoutData {
+  user: UserInfo | null;  // ✅ Added user data from cookie
   isAuthenticated: boolean;
   currentPath: string;
 }
@@ -33,5 +34,5 @@ export interface LayoutData {
 
 export interface PageData extends LayoutData {
   dashboard: SimpleDashboard;
-  user: UserInfo;
+  user: UserInfo;  // Page-specific user data (required)
 }

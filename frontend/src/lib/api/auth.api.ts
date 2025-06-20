@@ -40,14 +40,19 @@ export const authAPI = {
         credentials as any
       );
       
-      if (response.success) {
-        // Store user info in localStorage for quick access
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('userInfo', JSON.stringify(response.data.user));
-        }
-        
-        return response as LoginResponse;
-      }
+     if (response.success) {
+  // Store user info in cookie (secure, httpOnly-like behavior)
+  if (typeof window !== 'undefined') {
+    // เก็บใน cookie แทน localStorage
+    const userData = JSON.stringify(response.data.user);
+    document.cookie = `userData=${encodeURIComponent(userData)}; path=/; secure; samesite=strict; max-age=604800`; // 7 days
+    
+    // ยังเก็บใน localStorage ไว้เป็น backup (optional)
+    localStorage.setItem('userInfo', userData);
+  }
+  
+  return response as LoginResponse;
+}
       
       throw new Error(response.message || 'Login failed');
     } catch (error) {
@@ -67,10 +72,14 @@ export const authAPI = {
       );
       
       // Clear stored user info
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('userInfo');
-        localStorage.removeItem('lastActivity');
-      }
+     if (typeof window !== 'undefined') {
+  // Clear cookie
+  document.cookie = 'userData=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  
+  // Clear localStorage
+  localStorage.removeItem('userInfo');
+  localStorage.removeItem('lastActivity');
+}
       
       return response as LogoutResponse;
     } catch (error) {
