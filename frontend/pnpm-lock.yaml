@@ -17,6 +17,9 @@ importers:
       svelte-chartjs:
         specifier: ^3.1.5
         version: 3.1.5(chart.js@4.5.0)(svelte@5.34.3)
+      svelte-lucide:
+        specifier: ^2.0.1
+        version: 2.0.1(svelte@5.34.3)
       xlsx:
         specifier: ^0.18.5
         version: 0.18.5
@@ -1390,6 +1393,12 @@ packages:
       svelte:
         optional: true
 
+  svelte-lucide@2.0.1:
+    resolution: {integrity: sha512-VjcVYrgTBC9ZyUCIYT0pzFCSzOOBj5zKxQ9UTzq9GmJSjxwq0PPRmdsIl0F38bQ2IhAtuCLs0gkl56Xw8621rQ==}
+    engines: {node: '>=18.0.0', npm: '>=7.0.0'}
+    peerDependencies:
+      svelte: ^5.0.0
+
   svelte-preprocess@6.0.3:
     resolution: {integrity: sha512-PLG2k05qHdhmRG7zR/dyo5qKvakhm8IJ+hD2eFRQmMLHp7X3eJnjeupUtvuRpbNiF31RjVw45W+abDwHEmP5OA==}
     engines: {node: '>= 18.0.0'}
@@ -2671,6 +2680,10 @@ snapshots:
       postcss-scss: 4.0.9(postcss@8.5.6)
       postcss-selector-parser: 7.1.0
     optionalDependencies:
+      svelte: 5.34.3
+
+  svelte-lucide@2.0.1(svelte@5.34.3):
+    dependencies:
       svelte: 5.34.3
 
   svelte-preprocess@6.0.3(postcss-load-config@3.1.4(postcss@8.5.6))(postcss@8.5.6)(svelte@5.34.3)(typescript@5.8.3):
