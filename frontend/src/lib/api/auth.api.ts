@@ -17,7 +17,7 @@ import type {
   UserInfo,
   AuthError
 } from '$lib/types/auth.types';
-import type { ApiResponse } from '$lib/types/api.types';
+// ✅ Removed ApiResponse import - not needed since we use specific response types
 
 // ============================================
 // AUTHENTICATION API METHODS
@@ -37,22 +37,22 @@ export const authAPI = {
     try {
       const response = await apiClient.post<LoginResponse['data']>(
         config.auth.endpoints.LOGIN,
-        credentials as any
+        credentials
       );
       
-     if (response.success) {
-  // Store user info in cookie (secure, httpOnly-like behavior)
-  if (typeof window !== 'undefined') {
-    // เก็บใน cookie แทน localStorage
-    const userData = JSON.stringify(response.data.user);
-    document.cookie = `userData=${encodeURIComponent(userData)}; path=/; secure; samesite=strict; max-age=604800`; // 7 days
-    
-    // ยังเก็บใน localStorage ไว้เป็น backup (optional)
-    localStorage.setItem('userInfo', userData);
-  }
-  
-  return response as LoginResponse;
-}
+      if (response.success) {
+        // Store user info in cookie (secure, httpOnly-like behavior)
+        if (typeof window !== 'undefined') {
+          // เก็บใน cookie แทน localStorage
+          const userData = JSON.stringify(response.data.user);
+          document.cookie = `userData=${encodeURIComponent(userData)}; path=/; secure; samesite=strict; max-age=604800`; // 7 days
+          
+          // ยังเก็บใน localStorage ไว้เป็น backup (optional)
+          localStorage.setItem('userInfo', userData);
+        }
+        
+        return response as LoginResponse;
+      }
       
       throw new Error(response.message || 'Login failed');
     } catch (error) {
@@ -72,14 +72,14 @@ export const authAPI = {
       );
       
       // Clear stored user info
-     if (typeof window !== 'undefined') {
-  // Clear cookie
-  document.cookie = 'userData=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-  
-  // Clear localStorage
-  localStorage.removeItem('userInfo');
-  localStorage.removeItem('lastActivity');
-}
+      if (typeof window !== 'undefined') {
+        // Clear cookie
+        document.cookie = 'userData=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        
+        // Clear localStorage
+        localStorage.removeItem('userInfo');
+        localStorage.removeItem('lastActivity');
+      }
       
       return response as LogoutResponse;
     } catch (error) {
@@ -104,7 +104,7 @@ export const authAPI = {
       
       const response = await apiClient.post<RefreshTokenResponse['data']>(
         config.auth.endpoints.REFRESH,
-        requestData as any
+        requestData
       );
       
       // Update user info if provided
@@ -178,7 +178,7 @@ export const authAPI = {
     try {
       const response = await apiClient.post<ChangePasswordResponse['data']>(
         config.auth.endpoints.CHANGE_PASSWORD,
-        passwordData as any
+        passwordData
       );
       
       return response as ChangePasswordResponse;
@@ -191,7 +191,7 @@ export const authAPI = {
    * Check authentication service health
    * @returns Service health status
    */
-  async getHealthStatus(): Promise<ApiResponse<{ status: string; timestamp: string }>> {
+  async getHealthStatus(): Promise<{ success: boolean; data: { status: string; timestamp: string } }> {
     try {
       const response = await apiClient.get<{ status: string; timestamp: string }>(
         config.auth.endpoints.HEALTH
@@ -301,141 +301,12 @@ export const authUtils = {
    */
   clearAuthData(): void {
     if (typeof window !== 'undefined') {
+      // Clear localStorage
       localStorage.removeItem('userInfo');
       localStorage.removeItem('lastActivity');
-    }
-  },
-
-  /**
-   * Check if user has specific permission
-   * @param permission - Permission to check
-   * @returns True if user has permission
-   */
-  hasPermission(permission: string): boolean {
-    const user = this.getStoredUser();
-    if (!user) return false;
-    
-    // Import permission check from config
-    // This would need to be imported from your auth config
-    // For now, basic role-based check
-    switch (permission) {
-      case 'canManageUsers':
-        return user.userRoleId <= 2; // ADMIN or SUPERADMIN
-      case 'canManageSystemData':
-        return user.userRoleId === 1; // SUPERADMIN only
-      case 'canAccessAllHospitals':
-        return user.userRoleId <= 2; // ADMIN or SUPERADMIN
-      case 'canExportData':
-        return true; // All authenticated users
-      case 'canDeleteData':
-        return user.userRoleId <= 2; // ADMIN or SUPERADMIN
-      default:
-        return false;
+      
+      // Clear cookies
+      document.cookie = 'userData=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     }
   }
 };
-
-// ============================================
-// AUTO-REFRESH TOKEN SETUP
-// ============================================
-
-/**
- * Setup automatic token refresh
- * This will attempt to refresh the token before it expires
- */
-export function setupAutoRefresh(): void {
-  if (typeof window === 'undefined') return;
-
-  // Check token validity every 5 minutes
-  const checkInterval = 5 * 60 * 1000;
-  
-  setInterval(async () => {
-    if (authUtils.isAuthenticated() && !authUtils.isSessionExpired()) {
-      try {
-        await authAPI.verifyToken();
-      } catch (error) {
-        console.warn('Token verification failed:', error);
-        // Don't automatically logout, let the user handle it
-      }
-    }
-  }, checkInterval);
-}
-
-// ============================================
-// ACTIVITY TRACKING SETUP
-// ============================================
-
-/**
- * Setup user activity tracking
- * This updates the last activity timestamp on user interactions
- */
-export function setupActivityTracking(): void {
-  if (typeof window === 'undefined') return;
-
-  const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
-  
-  const updateActivity = () => {
-    if (authUtils.isAuthenticated()) {
-      authUtils.updateLastActivity();
-    }
-  };
-
-  // Throttle activity updates to once per minute
-  let lastUpdate = 0;
-  const throttledUpdate = () => {
-    const now = Date.now();
-    if (now - lastUpdate > 60000) { // 1 minute
-      updateActivity();
-      lastUpdate = now;
-    }
-  };
-
-  events.forEach(event => {
-    document.addEventListener(event, throttledUpdate, true);
-  });
-}
-
-// ============================================
-// AUTHENTICATION GUARD
-// ============================================
-
-/**
- * Authentication guard for protecting routes
- * @param redirectTo - Where to redirect if not authenticated
- * @returns True if authenticated
- */
-export async function requireAuth(redirectTo: string = '/login'): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
-
-  // Quick check with stored data
-  if (!authUtils.isAuthenticated()) {
-    window.location.href = redirectTo;
-    return false;
-  }
-
-  // Verify with server if session might be expired
-  if (authUtils.isSessionExpired()) {
-    try {
-      await authAPI.verifyToken();
-      return true;
-    } catch {
-      window.location.href = redirectTo;
-      return false;
-    }
-  }
-
-  return true;
-}
-
-// ============================================
-// INITIALIZE AUTH FEATURES
-// ============================================
-
-// Auto-setup when module loads
-if (typeof window !== 'undefined') {
-  setupAutoRefresh();
-  setupActivityTracking();
-}
-
-// Export default auth API
-export default authAPI;

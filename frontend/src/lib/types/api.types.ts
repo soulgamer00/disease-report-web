@@ -1,438 +1,329 @@
-// frontend/src/lib/types/api.types.ts
-// API client and HTTP request/response types
-// ✅ Type-safe API communication
+// frontend/src/lib/types/auth.types.ts
+// ✅ Updated Authentication types - Pure HttpOnly Cookies
+// ลบ token types ที่ไม่จำเป็นออก เพราะ browser จัดการ cookies อัตโนมัติ
 
-import type { 
-  HttpMethod, 
-  BaseResponse, 
-  ErrorResponse, 
-  PaginatedResponse,
-  QueryParams 
-} from './common.types';
-import type { AuthError } from './auth.types';
+import type { BaseResponse, ErrorResponse, BaseEntity } from './common.types';
 
 // ============================================
-// API CLIENT CONFIGURATION
+// USER ROLE TYPES
 // ============================================
 
 /**
- * API client configuration
+ * User role IDs (must match backend)
  */
-export interface ApiClientConfig {
-  baseUrl: string;
-  timeout: number;
-  retries: number;
-  retryDelay: number;
-  headers: Record<string, string>;
-}
+export type UserRoleId = 1 | 2 | 3;
 
 /**
- * Request configuration
+ * User role names
  */
-export interface RequestConfig {
-  method: HttpMethod;
-  url: string;
-  data?: unknown;
-  params?: Record<string, unknown>;
-  headers?: Record<string, string>;
-  timeout?: number;
-  retries?: number;
-  withCredentials?: boolean;
-  signal?: AbortSignal;
-}
+export type UserRoleName = 'SUPERADMIN' | 'ADMIN' | 'USER';
 
 /**
- * Response configuration
+ * User role mapping
  */
-export interface ResponseConfig<T = unknown> {
-  data: T;
-  status: number;
-  statusText: string;
-  headers: Record<string, string>;
-  config: RequestConfig;
+export interface UserRole {
+  id: UserRoleId;
+  name: UserRoleName;
+  displayName: string;
 }
 
 // ============================================
-// API ERROR TYPES
+// USER ENTITY TYPES
 // ============================================
 
 /**
- * API error categories
+ * Core user information
  */
-export type ApiErrorType = 
-  | 'NETWORK_ERROR'
-  | 'TIMEOUT_ERROR'
-  | 'VALIDATION_ERROR'
-  | 'AUTHENTICATION_ERROR'
-  | 'AUTHORIZATION_ERROR'
-  | 'NOT_FOUND_ERROR'
-  | 'SERVER_ERROR'
-  | 'UNKNOWN_ERROR';
-
-/**
- * API error class
- */
-export interface ApiError {
-  name: string;
-  message: string;
-  type: ApiErrorType;
-  status: number;
-  statusText: string;
-  data?: ErrorResponse | AuthError | Record<string, unknown>;
-  timestamp: Date;
-  url?: string;
-  method?: HttpMethod;
-  retryCount?: number;
-  isRetryable: boolean;
+export interface UserInfo extends BaseEntity {
+  username: string;
+  email: string | null;
+  fname: string;
+  lname: string;
+  userRoleId: UserRoleId;
+  userRole: string; // Display name of role
+  hospitalCode9eDigit: string | null;
+  hospital: {
+    id: string;
+    hospitalName: string;
+    hospitalCode9eDigit: string;
+  } | null;
+  lastLoginAt: string | null;
+  isActive: boolean;
 }
 
 /**
- * Network error (connection issues)
+ * User profile (subset of UserInfo for display)
  */
-export interface NetworkError extends Omit<ApiError, 'type'> {
-  type: 'NETWORK_ERROR';
-  originalError?: Error;
+export interface UserProfile {
+  id: string;
+  username: string;
+  email: string | null;
+  fname: string;
+  lname: string;
+  fullName: string;
+  userRoleId: UserRoleId;
+  userRole: string;
+  hospitalName: string | null;
+  lastLoginAt: string | null;
 }
 
 /**
- * Timeout error
+ * User summary (minimal info for listings)
  */
-export interface TimeoutError extends Omit<ApiError, 'type'> {
-  type: 'TIMEOUT_ERROR';
-  timeoutDuration: number;
-}
-
-/**
- * Validation error (400 Bad Request)
- */
-export interface ValidationError extends Omit<ApiError, 'type'> {
-  type: 'VALIDATION_ERROR';
-  validationErrors: Array<{
-    field: string;
-    message: string;
-    value?: unknown;
-  }>;
+export interface UserSummary {
+  id: string;
+  username: string;
+  fullName: string;
+  userRoleId: UserRoleId;
+  userRole: string;
+  hospitalName: string | null;
+  isActive: boolean;
 }
 
 // ============================================
-// API REQUEST TYPES
+// AUTHENTICATION REQUEST TYPES
 // ============================================
 
 /**
- * GET request parameters
+ * Login request payload
  */
-export interface GetRequestParams extends QueryParams {
-  [key: string]: unknown;
+export interface LoginRequest {
+  username: string;
+  password: string;
+  rememberMe?: boolean;
 }
 
 /**
- * POST request body
+ * Change password request payload
  */
-export interface PostRequestBody {
-  [key: string]: unknown;
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
 }
 
 /**
- * PUT request body
+ * Reset password request payload (future feature)
  */
-export interface PutRequestBody {
-  [key: string]: unknown;
+export interface ResetPasswordRequest {
+  email: string;
 }
 
 /**
- * PATCH request body
+ * Admin change password request (admin changing user's password)
  */
-export interface PatchRequestBody {
-  [key: string]: unknown;
-}
-
-/**
- * DELETE request parameters
- */
-export interface DeleteRequestParams {
-  [key: string]: unknown;
+export interface AdminChangePasswordRequest {
+  newPassword: string;
+  confirmPassword: string;
 }
 
 // ============================================
-// API RESPONSE TYPES
+// AUTHENTICATION RESPONSE TYPES
 // ============================================
 
 /**
- * Generic API response
+ * Login response data
+ * ✅ ตรงกับ backend structure - ไม่มี tokens เพราะใช้ httpOnly cookies
  */
-export type ApiResponse<T = unknown> = BaseResponse<T>;
+export interface LoginResponseData {
+  user: UserInfo;
+  expiresIn: string; // Token expiration duration (ส่งมาจาก backend)
+}
 
 /**
- * Success API response
+ * Login response
  */
-export interface ApiSuccessResponse<T = unknown> extends BaseResponse<T> {
+export interface LoginResponse extends BaseResponse<LoginResponseData> {
   success: true;
-  data: T;
+  data: LoginResponseData;
 }
 
 /**
- * Error API response
+ * Logout response
  */
-export interface ApiErrorResponse extends ErrorResponse {
-  success: false;
-}
-
-/**
- * Paginated API response
- */
-export interface ApiPaginatedResponse<T> extends BaseResponse<PaginatedResponse<T>> {
+export interface LogoutResponse extends BaseResponse<{ message: string }> {
   success: true;
-  data: PaginatedResponse<T>;
-}
-
-// ============================================
-// HTTP CLIENT INTERFACE
-// ============================================
-
-/**
- * HTTP client interface
- */
-export interface HttpClient {
-  // Configuration
-  config: ApiClientConfig;
-  
-  // Request methods
-  get<T = unknown>(url: string, params?: GetRequestParams, config?: Partial<RequestConfig>): Promise<ApiResponse<T>>;
-  post<T = unknown>(url: string, data?: PostRequestBody, config?: Partial<RequestConfig>): Promise<ApiResponse<T>>;
-  put<T = unknown>(url: string, data?: PutRequestBody, config?: Partial<RequestConfig>): Promise<ApiResponse<T>>;
-  patch<T = unknown>(url: string, data?: PatchRequestBody, config?: Partial<RequestConfig>): Promise<ApiResponse<T>>;
-  delete<T = unknown>(url: string, params?: DeleteRequestParams, config?: Partial<RequestConfig>): Promise<ApiResponse<T>>;
-  
-  // Utility methods
-  request<T = unknown>(config: RequestConfig): Promise<ApiResponse<T>>;
-  setBaseUrl(baseUrl: string): void;
-  setDefaultHeaders(headers: Record<string, string>): void;
-  addRequestInterceptor(interceptor: RequestInterceptor): void;
-  addResponseInterceptor(interceptor: ResponseInterceptor): void;
-}
-
-// ============================================
-// INTERCEPTOR TYPES
-// ============================================
-
-/**
- * Request interceptor function
- */
-export type RequestInterceptor = (config: RequestConfig) => RequestConfig | Promise<RequestConfig>;
-
-/**
- * Response interceptor function
- */
-export type ResponseInterceptor = (response: ResponseConfig) => ResponseConfig | Promise<ResponseConfig>;
-
-/**
- * Error interceptor function
- */
-export type ErrorInterceptor = (error: ApiError) => Promise<never> | Promise<ResponseConfig>;
-
-/**
- * Interceptor configuration
- */
-export interface InterceptorConfig {
-  request?: RequestInterceptor[];
-  response?: ResponseInterceptor[];
-  error?: ErrorInterceptor[];
-}
-
-// ============================================
-// API ENDPOINT TYPES
-// ============================================
-
-/**
- * API endpoint definition
- */
-export interface ApiEndpoint {
-  path: string;
-  method: HttpMethod;
-  requiresAuth: boolean;
-  timeout?: number;
-  retries?: number;
+  data: { message: string };
 }
 
 /**
- * API endpoint group
+ * Profile response
  */
-export interface ApiEndpointGroup {
-  baseUrl: string;
-  endpoints: Record<string, ApiEndpoint>;
-  defaultHeaders?: Record<string, string>;
+export interface ProfileResponse extends BaseResponse<UserInfo> {
+  success: true;
+  data: UserInfo;
 }
 
 /**
- * Complete API definition
+ * Verify token response data
+ * ✅ แก้ไขให้เหมาะกับ httpOnly cookies
  */
-export interface ApiDefinition {
-  baseUrl: string;
-  version: string;
-  groups: Record<string, ApiEndpointGroup>;
+export interface VerifyTokenResponseData {
+  user: UserInfo;
+  authenticated: boolean;
+}
+
+/**
+ * Verify token response
+ */
+export interface VerifyTokenResponse extends BaseResponse<VerifyTokenResponseData> {
+  success: true;
+  data: VerifyTokenResponseData;
+}
+
+/**
+ * Change password response
+ */
+export interface ChangePasswordResponse extends BaseResponse<{ updatedAt: string }> {
+  success: true;
+  data: { updatedAt: string };
 }
 
 // ============================================
-// LOADING & CACHE TYPES
+// AUTHENTICATION STATE TYPES (สำหรับ Frontend)
 // ============================================
 
 /**
- * API loading state
+ * Authentication state for UI
+ * ✅ ไม่มี token fields เพราะใช้ cookies
  */
-export interface ApiLoadingState {
+export interface AuthState {
+  isAuthenticated: boolean;
   isLoading: boolean;
-  loadingMessage?: string;
-  progress?: number; // 0-100
+  user: UserInfo | null;
+  error: string | null;
+  lastActivity: number; // Timestamp of last activity
 }
 
 /**
- * API cache entry
+ * Login form state
  */
-export interface ApiCacheEntry<T = unknown> {
-  key: string;
-  data: T;
-  timestamp: number;
-  expiresAt: number;
-  tags: string[];
+export interface LoginFormState {
+  username: string;
+  password: string;
+  rememberMe: boolean;
+  isSubmitting: boolean;
+  errors: {
+    username?: string;
+    password?: string;
+    general?: string;
+  };
 }
 
 /**
- * API cache configuration
+ * Change password form state
  */
-export interface ApiCacheConfig {
-  enabled: boolean;
-  defaultTtl: number; // Time to live in milliseconds
-  maxSize: number; // Maximum number of entries
-  storageType: 'memory' | 'localStorage' | 'sessionStorage';
-}
-
-/**
- * Cache manager interface
- */
-export interface CacheManager {
-  get<T>(key: string): ApiCacheEntry<T> | null;
-  set<T>(key: string, data: T, ttl?: number, tags?: string[]): void;
-  delete(key: string): void;
-  clear(): void;
-  invalidateByTag(tag: string): void;
-  size(): number;
-  cleanup(): void; // Remove expired entries
-}
-
-// ============================================
-// RETRY & CIRCUIT BREAKER TYPES
-// ============================================
-
-/**
- * Retry configuration
- */
-export interface RetryConfig {
-  retries: number;
-  retryDelay: number;
-  retryDelayMultiplier: number;
-  maxRetryDelay: number;
-  retryCondition: (error: ApiError) => boolean;
-}
-
-/**
- * Circuit breaker state
- */
-export type CircuitBreakerState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
-
-/**
- * Circuit breaker configuration
- */
-export interface CircuitBreakerConfig {
-  failureThreshold: number;
-  recoveryTimeout: number;
-  monitoringPeriod: number;
-}
-
-/**
- * Circuit breaker status
- */
-export interface CircuitBreakerStatus {
-  state: CircuitBreakerState;
-  failureCount: number;
-  lastFailureTime: number;
-  nextAttemptTime: number;
+export interface ChangePasswordFormState {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  isSubmitting: boolean;
+  errors: {
+    currentPassword?: string;
+    newPassword?: string;
+    confirmPassword?: string;
+    general?: string;
+  };
 }
 
 // ============================================
-// UPLOAD & DOWNLOAD TYPES
+// PERMISSION TYPES
 // ============================================
 
 /**
- * File upload progress
+ * Available permissions in the system
  */
-export interface UploadProgress {
-  loaded: number;
-  total: number;
-  percentage: number;
-  rate: number; // Bytes per second
-  estimated: number; // Estimated time remaining in seconds
-}
+export type Permission = 
+  | 'canManageUsers'
+  | 'canManageSystemData'
+  | 'canAccessAllHospitals'
+  | 'canExportData'
+  | 'canDeleteData'
+  | 'canViewReports'
+  | 'canCreateReports'
+  | 'canEditReports'
+  | 'canDeleteReports';
 
 /**
- * Upload configuration
+ * Permission check result
  */
-export interface UploadConfig extends Partial<RequestConfig> {
-  onProgress?: (progress: UploadProgress) => void;
-  chunkSize?: number;
-  allowedTypes?: string[];
-  maxFileSize?: number;
-}
-
-/**
- * Download configuration
- */
-export interface DownloadConfig extends Partial<RequestConfig> {
-  filename?: string;
-  onProgress?: (progress: UploadProgress) => void;
-}
-
-/**
- * Upload response
- */
-export interface UploadResponse {
-  id: string;
-  filename: string;
-  originalName: string;
-  size: number;
-  mimeType: string;
-  url: string;
-  metadata?: Record<string, unknown>;
+export interface PermissionCheck {
+  hasPermission: boolean;
+  reason?: string;
+  requiredRole?: UserRoleId;
 }
 
 // ============================================
-// WEBSOCKET & REALTIME TYPES
+// ERROR TYPES
 // ============================================
 
 /**
- * WebSocket connection state
+ * Authentication specific errors
  */
-export type WebSocketState = 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'ERROR';
-
-/**
- * WebSocket message
- */
-export interface WebSocketMessage<T = unknown> {
-  id: string;
-  type: string;
-  data: T;
-  timestamp: number;
+export interface AuthError extends ErrorResponse {
+  code: 'AUTH_FAILED' | 'TOKEN_EXPIRED' | 'INVALID_CREDENTIALS' | 'SESSION_EXPIRED' | 'ACCESS_DENIED';
+  timestamp: string;
 }
 
 /**
- * WebSocket configuration
+ * Login error details
  */
-export interface WebSocketConfig {
-  url: string;
-  protocols?: string[];
-  reconnect: boolean;
-  reconnectAttempts: number;
-  reconnectInterval: number;
-  heartbeatInterval: number;
+export interface LoginError {
+  field?: 'username' | 'password' | 'general';
+  message: string;
+  code?: string;
+}
+
+// ============================================
+// VALIDATION TYPES
+// ============================================
+
+/**
+ * Password validation rules
+ */
+export interface PasswordValidationRules {
+  minLength: number;
+  requireUppercase: boolean;
+  requireLowercase: boolean;
+  requireNumbers: boolean;
+  requireSpecialChars: boolean;
+  forbiddenPatterns: string[];
+}
+
+/**
+ * Password validation result
+ */
+export interface PasswordValidationResult {
+  isValid: boolean;
+  errors: string[];
+  strength: 'weak' | 'medium' | 'strong';
+  score: number; // 0-100
+}
+
+// ============================================
+// SESSION TYPES
+// ============================================
+
+/**
+ * Session information (local storage based)
+ * ✅ ไม่มี token เพราะอยู่ใน httpOnly cookies
+ */
+export interface SessionInfo {
+  user: UserInfo;
+  lastActivity: number;
+  loginTime: number;
+  isExpired: boolean;
+}
+
+/**
+ * Activity tracking
+ */
+export interface ActivityTracker {
+  lastMouseMove: number;
+  lastKeyPress: number;
+  lastClick: number;
+  lastApiCall: number;
+  isActive: boolean;
 }
 
 // ============================================
@@ -440,63 +331,34 @@ export interface WebSocketConfig {
 // ============================================
 
 /**
- * Extract response data type from API response
+ * Auth context for React/Svelte stores
  */
-export type ApiResponseData<T> = T extends BaseResponse<infer U> ? U : never;
-
-/**
- * Extract success response type
- */
-export type ApiSuccessResponseType<T> = T extends ApiResponse<infer U> ? ApiSuccessResponse<U> : never;
-
-/**
- * Extract error response type
- */
-export type ApiErrorResponseType = ApiErrorResponse | AuthError;
-
-/**
- * API method return type
- */
-export type ApiMethodResult<T> = Promise<ApiResponse<T>>;
-
-/**
- * API client method signature
- */
-export type ApiClientMethod<TParams = unknown, TResponse = unknown> = (
-  params: TParams,
-  config?: Partial<RequestConfig>
-) => ApiMethodResult<TResponse>;
+export interface AuthContext {
+  user: UserInfo | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+  login: (credentials: LoginRequest) => Promise<void>;
+  logout: () => Promise<void>;
+  verifyAuth: () => Promise<void>;
+  updateProfile: (data: Partial<UserInfo>) => Promise<void>;
+  hasPermission: (permission: Permission) => boolean;
+  clearError: () => void;
+}
 
 // ============================================
-// MOCK & TESTING TYPES
+// DEPRECATED TYPES (Removed)
 // ============================================
 
-/**
- * API mock response
- */
-export interface MockResponse<T = unknown> {
-  data: T;
-  status: number;
-  delay?: number;
-  headers?: Record<string, string>;
-}
+/* ❌ ลบ types เหล่านี้ออกแล้ว เพราะใช้ httpOnly cookies:
 
-/**
- * API mock configuration
- */
-export interface MockConfig {
-  enabled: boolean;
-  baseDelay: number;
-  randomDelay: boolean;
-  errorRate: number; // 0-1, probability of returning an error
-}
+- JwtPayload
+- TokenInfo  
+- TokenStorage
+- RefreshTokenRequest
+- RefreshTokenResponse
+- RefreshTokenResponseData
+- LoginResponseData.accessToken
+- LoginResponseData.refreshToken
 
-/**
- * Mock API client
- */
-export interface MockApiClient extends HttpClient {
-  addMockResponse(url: string, method: HttpMethod, response: MockResponse): void;
-  removeMockResponse(url: string, method: HttpMethod): void;
-  clearMockResponses(): void;
-  setErrorRate(rate: number): void;
-}
+*/

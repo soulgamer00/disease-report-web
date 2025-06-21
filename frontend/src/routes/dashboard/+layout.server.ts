@@ -1,23 +1,86 @@
 // frontend/src/routes/dashboard/+layout.server.ts
-// ✅ Dashboard auth protection + User data from cookies
-// Server-side authentication check for dashboard routes
+// ✅ FIXED Dashboard auth protection + Proper server-client sync
+// Server-side authentication check with proper state passing
 
-import { redirect } from '@sveltejs/kit';
-import type { LayoutServerLoad } from './$types';
+import { redirect, type Cookies } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import type { UserInfo } from '$lib/types/auth.types';
+
+// ✅ Define parameter types explicitly
+interface LoadParams {
+  cookies: Cookies;
+  url: URL;
+  fetch: typeof fetch;
+}
+
+// ✅ Define return type explicitly and export it
+export interface LayoutData {
+  isAuthenticated: boolean;
+  user: UserInfo | null;
+  currentPath: string;
+  currentSearch: string;
+  debug?: {
+    hasAccessToken: boolean;
+    hasRefreshToken: boolean;
+    hasUserData: boolean;
+    cookieUserData: boolean;
+  };
+}
 
 // ============================================
 // AUTH PROTECTION FOR DASHBOARD
 // ============================================
 
-export const load: LayoutServerLoad = async ({ cookies, url }) => {
-  console.log('🔐 Dashboard auth check...');
+export const load = async ({ cookies, url, fetch }: LoadParams): Promise<LayoutData> => {
+  console.log('🔐 Dashboard auth check...', url.pathname);
   
-  // Check authentication tokens
+  // Check authentication tokens from cookies
   const accessToken = cookies.get('accessToken');
   const refreshToken = cookies.get('refreshToken');
   
-  // Get user data from cookie
+  console.log('📋 Cookie status:', {
+    hasAccessToken: !!accessToken,
+    hasRefreshToken: !!refreshToken,
+    path: url.pathname
+  });
+  
+  // ✅ ถ้าไม่มี token เลย -> redirect ไปหน้า login ทันที
+  if (!accessToken && !refreshToken) {
+    console.log('❌ No auth tokens found, redirecting to login');
+    
+    const loginUrl = `/login?redirect=${encodeURIComponent(url.pathname + url.search)}`;
+    throw redirect(302, loginUrl);
+  }
+  
+  // ✅ มี refreshToken แต่ไม่มี accessToken -> ลอง refresh
+  if (!accessToken && refreshToken) {
+    console.log('🔄 Access token missing, attempting refresh...');
+    
+    try {
+      const refreshResponse = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': `refreshToken=${refreshToken}`
+        },
+        body: JSON.stringify({})
+      });
+      
+      if (!refreshResponse.ok) {
+        console.log('❌ Token refresh failed, redirecting to login');
+        const loginUrl = `/login?redirect=${encodeURIComponent(url.pathname + url.search)}`;
+        throw redirect(302, loginUrl);
+      }
+      
+      console.log('✅ Token refreshed successfully');
+    } catch (error) {
+      console.error('❌ Refresh error:', error);
+      const loginUrl = `/login?redirect=${encodeURIComponent(url.pathname + url.search)}`;
+      throw redirect(302, loginUrl);
+    }
+  }
+  
+  // ✅ Get user data from cookie (ถ้ามี)
   const userDataCookie = cookies.get('userData');
   let userData: UserInfo | null = null;
   
@@ -26,37 +89,83 @@ export const load: LayoutServerLoad = async ({ cookies, url }) => {
       userData = JSON.parse(decodeURIComponent(userDataCookie)) as UserInfo;
       console.log('👤 User data loaded from cookie:', {
         username: userData.username,
-        fullName: `${userData.fname} ${userData.lname}`,
-        role: userData.userRoleId
+        fullName: userData.fname && userData.lname ? `${userData.fname} ${userData.lname}` : userData.username,
+        role: userData.userRoleId,
+        hospital: userData.hospital?.hospitalName
       });
     } catch (error) {
       console.warn('⚠️ Failed to parse userData cookie:', error);
+      userData = null;
     }
   }
   
-  console.log('📋 Auth status:', {
-    hasAccessToken: !!accessToken,
-    hasRefreshToken: !!refreshToken,
-    hasUserData: !!userData,
-    path: url.pathname
-  });
-  
-  // If no tokens found, redirect to login
-  if (!accessToken && !refreshToken) {
-    console.log('❌ No auth tokens found, redirecting to login');
+  // ✅ ถ้าไม่มี userData ใน cookie แต่มี token -> ลองดึงจาก API
+  if (!userData && (accessToken || refreshToken)) {
+    console.log('🔄 No user data in cookie, fetching from API...');
     
-    // Build login URL with redirect parameter
-    const loginUrl = `/login?redirect=${encodeURIComponent(url.pathname + url.search)}`;
-    throw redirect(302, loginUrl);
+    try {
+      const profileResponse = await fetch('/api/auth/profile', {
+        headers: {
+          'Cookie': `accessToken=${accessToken}; refreshToken=${refreshToken}`
+        }
+      });
+      
+      if (profileResponse.ok) {
+        const profileData = await profileResponse.json();
+        if (profileData.success) {
+          userData = profileData.data as UserInfo;
+          console.log('✅ User data fetched from API');
+          
+          // ✅ Set userData cookie สำหรับครั้งต่อไป
+          cookies.set('userData', encodeURIComponent(JSON.stringify(userData)), {
+            path: '/',
+            maxAge: 60 * 60 * 24 * 7, // 7 days
+            httpOnly: false, // ต้องให้ client อ่านได้
+            secure: !dev, // secure ใน production เท่านั้น
+            sameSite: 'strict'
+          });
+        }
+      } else {
+        console.warn('⚠️ Failed to fetch user profile');
+      }
+    } catch (error) {
+      console.error('❌ Profile fetch error:', error);
+    }
   }
   
-  // If we have tokens, assume user is authenticated
-  console.log('✅ Auth tokens found, allowing access');
+  // ✅ ถ้าหลังจากพยายามทุกวิธีแล้วยังไม่มี userData -> อาจมีปัญหา
+  if (!userData) {
+    console.warn('⚠️ No user data available despite having tokens');
+    
+    // ✅ ให้โอกาสสุดท้าย - อาจจะเป็น data corruption
+    // ไม่ redirect ทันที แต่ส่ง flag ให้ client handle
+  }
   
+  console.log('✅ Auth check completed:', {
+    hasUserData: !!userData,
+    isAuthenticated: !!(userData && (accessToken || refreshToken)),
+    userId: userData?.id,
+    username: userData?.username
+  });
+  
+  // ✅ Return ข้อมูลที่ครบถ้วนสำหรับ client
   return {
-    // Pass user data from cookie (this prevents hydration mismatch)
+    // ✅ Authentication state
+    isAuthenticated: !!(userData && (accessToken || refreshToken)),
     user: userData,
-    isAuthenticated: true,
-    currentPath: url.pathname
+    
+    // ✅ Page metadata
+    currentPath: url.pathname,
+    currentSearch: url.search,
+    
+    // ✅ Debugging info (เฉพาะ development)
+    ...(dev && {
+      debug: {
+        hasAccessToken: !!accessToken,
+        hasRefreshToken: !!refreshToken,
+        hasUserData: !!userData,
+        cookieUserData: !!userDataCookie
+      }
+    })
   };
 };

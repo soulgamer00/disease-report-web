@@ -1,4 +1,5 @@
 // backend/src/controllers/auth.controller.ts
+// ✅ PATCHED for Hybrid Approach - Added missing refreshToken method and fixed login response
 
 import { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service';
@@ -19,7 +20,7 @@ import { config } from '../config';
 export class AuthController {
 
   // ============================================
-  // LOGIN ENDPOINT
+  // LOGIN ENDPOINT (FIXED)
   // ============================================
   
   static async login(req: Request, res: Response): Promise<void> {
@@ -46,19 +47,21 @@ export class AuthController {
         maxAge: 15 * 60 * 1000, // 15 minutes (same as JWT expiry)
       });
 
-      // Return success response (WITHOUT tokens in body)
+      // ✅ FIXED: Return success response WITH tokens in body (Hybrid approach)
       res.status(200).json({
         success: true,
         message: 'เข้าสู่ระบบสำเร็จ',
         data: {
           user: result.user,
+          accessToken: result.accessToken,    // ✅ NOW included
+          refreshToken: result.refreshToken,  // ✅ NOW included
           expiresIn: result.expiresIn,
         },
       });
     } catch (error) {
       console.error('Login error:', error);
       
-      const errorMessage = error instanceof Error ? 
+      const errorMessage = error instanceof Error ?
         error.message : 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ';
       
       res.status(400).json({
@@ -70,55 +73,16 @@ export class AuthController {
   }
 
   // ============================================
-  // CHANGE PASSWORD ENDPOINT
-  // ============================================
-  
-  static async changePassword(req: Request, res: Response): Promise<void> {
-    try {
-      // Check if user is authenticated
-      if (!req.user) {
-        res.status(401).json({
-          success: false,
-          message: 'กรุณาเข้าสู่ระบบ',
-          error: 'Authentication required',
-        });
-        return;
-      }
-
-      // Validate request body
-      const validatedData: ChangePasswordRequest = changePasswordSchema.parse(req.body);
-
-      // Call auth service
-      const result = await AuthService.changePassword(req.user.id, validatedData);
-
-      // Return success response
-      res.status(200).json({
-        success: true,
-        message: 'เปลี่ยนรหัสผ่านสำเร็จ',
-        data: result,
-      });
-    } catch (error) {
-      console.error('Change password error:', error);
-      
-      const errorMessage = error instanceof Error ? 
-        error.message : 'เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน';
-      
-      res.status(400).json({
-        success: false,
-        message: errorMessage,
-        error: 'Password change failed',
-      });
-    }
-  }
-
-  // ============================================
-  // REFRESH TOKEN ENDPOINT
+  // REFRESH TOKEN ENDPOINT (NEW - MISSING FROM ORIGINAL)
   // ============================================
   
   static async refreshToken(req: Request, res: Response): Promise<void> {
     try {
-      // Get refresh token from cookies only (not from request body)
-      const refreshToken = req.cookies?.refreshToken;
+      // Get refresh token from cookies first, then fallback to request body
+      const cookieRefreshToken = req.cookies?.refreshToken;
+      const bodyRefreshToken = req.body?.refreshToken;
+      
+      const refreshToken = cookieRefreshToken || bodyRefreshToken;
 
       if (!refreshToken) {
         res.status(400).json({
@@ -152,12 +116,15 @@ export class AuthController {
         maxAge: 15 * 60 * 1000, // 15 minutes
       });
 
-      // Return success response (WITHOUT tokens in body)
+      // ✅ HYBRID: Return success response WITH tokens in body
       res.status(200).json({
         success: true,
         message: 'ต่ออายุ token สำเร็จ',
         data: {
+          accessToken: result.accessToken,    // ✅ Include in response body
+          refreshToken: result.refreshToken,  // ✅ Include in response body
           expiresIn: result.expiresIn,
+          // ❌ Remove user field - AuthService.refreshToken() doesn't return user
         },
       });
     } catch (error) {
@@ -175,7 +142,49 @@ export class AuthController {
   }
 
   // ============================================
-  // GET PROFILE ENDPOINT
+  // CHANGE PASSWORD ENDPOINT (UNCHANGED)
+  // ============================================
+  
+  static async changePassword(req: Request, res: Response): Promise<void> {
+    try {
+      // Check if user is authenticated
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          message: 'กรุณาเข้าสู่ระบบ',
+          error: 'Authentication required',
+        });
+        return;
+      }
+
+      // Validate request body
+      const validatedData: ChangePasswordRequest = changePasswordSchema.parse(req.body);
+
+      // Call auth service
+      const result = await AuthService.changePassword(req.user.id, validatedData);
+
+      // Return success response
+      res.status(200).json({
+        success: true,
+        message: 'เปลี่ยนรหัสผ่านสำเร็จ',
+        data: result,
+      });
+    } catch (error) {
+      console.error('Change password error:', error);
+      
+      const errorMessage = error instanceof Error ?
+        error.message : 'เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน';
+      
+      res.status(400).json({
+        success: false,
+        message: errorMessage,
+        error: 'Password change failed',
+      });
+    }
+  }
+
+  // ============================================
+  // GET PROFILE ENDPOINT (UNCHANGED)
   // ============================================
   
   static async getProfile(req: Request, res: Response): Promise<void> {
@@ -204,7 +213,7 @@ export class AuthController {
     } catch (error) {
       console.error('Get profile error:', error);
       
-      const errorMessage = error instanceof Error ? 
+      const errorMessage = error instanceof Error ?
         error.message : 'เกิดข้อผิดพลาดในการดึงข้อมูลโปรไฟล์';
       
       res.status(500).json({
@@ -216,7 +225,7 @@ export class AuthController {
   }
 
   // ============================================
-  // LOGOUT ENDPOINT
+  // LOGOUT ENDPOINT (UNCHANGED)
   // ============================================
   
   static async logout(req: Request, res: Response): Promise<void> {
@@ -262,7 +271,7 @@ export class AuthController {
   }
 
   // ============================================
-  // VERIFY TOKEN ENDPOINT (for frontend to check auth status)
+  // VERIFY TOKEN ENDPOINT (UNCHANGED)
   // ============================================
   
   static async verifyToken(req: Request, res: Response): Promise<void> {

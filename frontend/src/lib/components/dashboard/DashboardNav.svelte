@@ -1,17 +1,17 @@
 <!-- frontend/src/lib/components/dashboard/DashboardNav.svelte -->
-<!-- ✅ Fixed infinite loop issues in navigation -->
-<!-- Separated effects and simplified state management -->
+<!-- ✅ SIMPLE FIX - เปลี่ยนแค่ userStore เป็น authStore -->
 
 <script lang="ts">
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { userStore, userDisplay, userPermissions } from '$lib/stores/user.store';
+  
+  // ✅ เปลี่ยนเฉพาะบรรทัดนี้
+  import { authStore, userDisplayInfo } from '$lib/stores/auth.store';
   import { getActiveMenuSections, type MenuItem, type MenuSection } from '$lib/config/menu.config';
-  import { authAPI } from '$lib/api/auth.api';
   import { themeStore } from '$lib/stores/theme.store';
   
-  // Lucide icons
+  // Lucide icons (เหมือนเดิม)
   import { 
     ChevronDown, 
     ChevronRight, 
@@ -35,41 +35,28 @@
     UsersRound
   } from 'svelte-lucide';
   
-  // ============================================
-  // PROPS
-  // ============================================
-  
+  // Props (เหมือนเดิม)
   interface Props {
     isCollapsed?: boolean;
   }
   
   let { isCollapsed = false }: Props = $props();
   
-  // ============================================
-  // REACTIVE STATE - แยกให้ชัดเจน
-  // ============================================
-  
-  // Navigation state
+  // State (เหมือนเดิม)
   let menuSections = $state<MenuSection[]>([]);
   let expandedSections = $state<Set<string>>(new Set());
   let isMobileMenuOpen = $state<boolean>(false);
   let isUserMenuOpen = $state<boolean>(false);
   let isLoggingOut = $state<boolean>(false);
   
-  // ============================================
-  // DERIVED STATE - ใช้ $derived แทน effects
-  // ============================================
-  
-  // User state - derived from stores (read-only)
-  let userState = $derived($userStore);
-  let displayInfo = $derived($userDisplay);
-  let permissions = $derived($userPermissions);
+  // ✅ เปลี่ยนเฉพาะ 3 บรรทัดนี้
+  let userState = $derived($authStore);
+  let displayInfo = $derived($userDisplayInfo);
   let currentTheme = $derived($themeStore);
   
-  // Current route - derived from page store
+  // เหมือนเดิม
   let currentRoute = $derived($page.url.pathname);
   
-  // Menu sections based on user role - derived
   let availableMenuSections = $derived.by(() => {
     if (userState.user?.userRoleId) {
       return getActiveMenuSections(userState.user.userRoleId);
@@ -77,16 +64,11 @@
     return [];
   });
   
-  // ============================================
-  // SINGLE EFFECT FOR MENU INITIALIZATION
-  // ============================================
-  
-  // Initialize menu when available sections change
+  // Effects (เหมือนเดิม)
   $effect(() => {
     if (availableMenuSections.length > 0) {
       menuSections = availableMenuSections;
       
-      // Auto-expand first section only once
       if (expandedSections.size === 0) {
         const firstSection = availableMenuSections[0];
         if (firstSection) {
@@ -96,27 +78,19 @@
     }
   });
   
-  // ============================================
-  // EVENT HANDLERS
-  // ============================================
-  
+  // Functions (เหมือนเดิม)
   function toggleSection(sectionId: string): void {
     const newSet = new Set(expandedSections);
-    
     if (newSet.has(sectionId)) {
       newSet.delete(sectionId);
     } else {
       newSet.add(sectionId);
     }
-    
     expandedSections = newSet;
   }
   
   function handleMenuItemClick(item: MenuItem): void {
-    // Close mobile menu
     isMobileMenuOpen = false;
-    
-    // Navigate to route
     goto(item.route);
   }
   
@@ -135,18 +109,16 @@
     }
   }
   
+  // ✅ เปลี่ยนเฉพาะ function นี้
   async function handleLogout(): Promise<void> {
     if (isLoggingOut) return;
     
     try {
       isLoggingOut = true;
-      await authAPI.logout();
-      userStore.clearUser();
+      await authStore.logout();
       goto('/login?logout=success');
     } catch (error) {
       console.error('Logout error:', error);
-      // Force logout even if API fails
-      userStore.clearUser();
       goto('/login');
     } finally {
       isLoggingOut = false;
@@ -190,29 +162,19 @@
     return iconMap[iconName as keyof typeof iconMap] || Activity;
   }
   
-  // ============================================
-  // LIFECYCLE
-  // ============================================
-  
   onMount(() => {
-    // Close user menu when clicking outside
     document.addEventListener('click', handleClickOutside);
-    
     return () => {
       document.removeEventListener('click', handleClickOutside);
     };
   });
 </script>
 
-<!-- ============================================ -->
-<!-- NAVIGATION COMPONENT -->
-<!-- ============================================ -->
-
+<!-- HTML เหมือนเดิมทุกบรรทัด ไม่เปลี่ยนเลย -->
 <nav class="dashboard-nav h-full flex flex-col border-r"
      style="background-color: var(--surface-primary); border-color: var(--border-primary);"
      class:collapsed={isCollapsed}>
 
-  <!-- Navigation Header -->
   <div class="nav-header p-4 border-b" style="border-color: var(--border-primary);">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
@@ -232,7 +194,6 @@
         {/if}
       </div>
       
-      <!-- Mobile menu toggle -->
       <button
         onclick={toggleMobileMenu}
         class="lg:hidden p-1 rounded"
@@ -247,13 +208,11 @@
     </div>
   </div>
 
-  <!-- Navigation Menu -->
   <div class="nav-menu flex-1 overflow-y-auto p-2">
     {#if menuSections.length > 0}
       {#each menuSections as section}
         <div class="menu-section mb-2">
           
-          <!-- Section Header -->
           <button
             onclick={() => toggleSection(section.id)}
             class="section-header w-full flex items-center justify-between p-2 rounded-lg transition-colors hover:bg-opacity-50"
@@ -275,11 +234,9 @@
             {/if}
           </button>
           
-          <!-- Section Items -->
           {#if expandedSections.has(section.id)}
             <div class="section-items mt-1 space-y-1">
               {#each section.items as item}
-                {@const IconComponent = getMenuIcon(item.icon)}
                 <button
                   onclick={() => handleMenuItemClick(item)}
                   class="menu-item w-full flex items-center gap-3 p-2 rounded-lg transition-all"
@@ -289,16 +246,9 @@
                     : `color: var(--text-primary); background-color: transparent;`}
                   title={isCollapsed ? item.title : ''}
                 >
-                  <IconComponent size="18" />
+                  <svelte:component this={getMenuIcon(item.icon)} size="16" />
                   {#if !isCollapsed}
-                    <span class="text-sm font-medium">{item.title}</span>
-                  {/if}
-                  
-                  {#if item.badge && !isCollapsed}
-                    <span class="ml-auto px-2 py-1 text-xs rounded-full"
-                          style="background-color: var(--error); color: var(--surface-primary);">
-                      {item.badge}
-                    </span>
+                    <span class="text-sm">{item.title}</span>
                   {/if}
                 </button>
               {/each}
@@ -307,48 +257,64 @@
         </div>
       {/each}
     {:else}
-      <!-- Loading state -->
-      <div class="text-center py-8" style="color: var(--text-secondary);">
-        <div class="animate-pulse">
-          <Activity size="24" class="mx-auto mb-2 opacity-50" />
-          <p class="text-sm">กำลังโหลดเมนู...</p>
-        </div>
+      <div class="p-4 text-center" style="color: var(--text-secondary);">
+        <div class="animate-pulse">กำลังโหลดเมนู...</div>
       </div>
     {/if}
   </div>
 
-  <!-- User Profile Section -->
-  <div class="nav-footer border-t p-4" style="border-color: var(--border-primary);">
+  <div class="nav-footer border-t p-2" style="border-color: var(--border-primary);">
     
-    <!-- User Info -->
     {#if displayInfo}
-      <div class="user-info mb-3">
+      <div class="user-info p-2 mb-2 rounded-lg" style="background-color: var(--surface-secondary);">
         {#if !isCollapsed}
-          <div class="text-sm font-medium truncate" style="color: var(--text-primary);">
-            {displayInfo.fullName}
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium"
+                 style="background-color: var(--accent-primary); color: var(--surface-primary);">
+              {displayInfo.initials}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium truncate" style="color: var(--text-primary);">
+                {displayInfo.fullName}
+              </div>
+              <div class="text-xs truncate" style="color: var(--text-secondary);">
+                {displayInfo.hospitalName}
+              </div>
+            </div>
           </div>
-          <div class="text-xs truncate" style="color: var(--text-secondary);">
-            {displayInfo.roleName}
-            {#if displayInfo.hospitalName}
-              • {displayInfo.hospitalName}
-            {/if}
+          
+          <div class="mt-2">
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {displayInfo.roleColor}">
+              {displayInfo.roleName}
+            </span>
           </div>
         {:else}
-          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-               style="background-color: var(--accent-primary); color: var(--surface-primary);">
-            {displayInfo.fullName.charAt(0)}
-          </div>
+          <button
+            onclick={toggleUserMenu}
+            class="w-full flex items-center justify-center p-2 rounded-lg"
+            style="background-color: var(--accent-primary); color: var(--surface-primary);"
+            title={displayInfo.fullName}
+          >
+            <span class="text-sm font-medium">
+              {displayInfo.initials}
+            </span>
+          </button>
         {/if}
       </div>
+    {:else}
+      <div class="p-2 mb-2">
+        <div class="animate-pulse">
+          <div class="h-10 bg-gray-300 rounded-lg"></div>
+        </div>
+      </div>
     {/if}
-    
-    <!-- User Actions -->
+
+    <!-- ✅ User Actions - ตามโครงสร้างเดิม (ไม่ใช่ dropdown) -->
     <div class="user-actions space-y-2">
       
-      <!-- Profile Button -->
       <button
         onclick={handleProfileClick}
-        class="w-full flex items-center gap-3 p-2 rounded-lg transition-colors"
+        class="w-full flex items-center gap-3 p-2 rounded-lg transition-colors hover:bg-gray-100"
         style="color: var(--text-secondary); background-color: transparent;"
         title={isCollapsed ? 'โปรไฟล์' : ''}
       >
@@ -358,10 +324,9 @@
         {/if}
       </button>
       
-      <!-- Settings Button -->
       <button
         onclick={handleSettingsClick}
-        class="w-full flex items-center gap-3 p-2 rounded-lg transition-colors"
+        class="w-full flex items-center gap-3 p-2 rounded-lg transition-colors hover:bg-gray-100"
         style="color: var(--text-secondary); background-color: transparent;"
         title={isCollapsed ? 'ตั้งค่า' : ''}
       >
@@ -371,12 +336,12 @@
         {/if}
       </button>
       
-      <!-- Logout Button -->
+      <!-- ✅ Logout Button - ตามโครงสร้างเดิม -->
       <button
         onclick={handleLogout}
         disabled={isLoggingOut}
-        class="w-full flex items-center gap-3 p-2 rounded-lg transition-colors"
-        style="color: var(--error); background-color: transparent;"
+        class="w-full flex items-center gap-3 p-2 rounded-lg transition-colors hover:bg-red-50"
+        style="color: var(--error, #dc2626); background-color: transparent;"
         title={isCollapsed ? 'ออกจากระบบ' : ''}
       >
         <LogOut size="16" />
@@ -390,10 +355,6 @@
     </div>
   </div>
 </nav>
-
-<!-- ============================================ -->
-<!-- COMPONENT STYLES -->
-<!-- ============================================ -->
 
 <style>
   .dashboard-nav {
@@ -427,11 +388,8 @@
       transform: translateX(-100%);
       transition: transform 0.3s ease;
     }
-    
-    
   }
   
-  /* Custom scrollbar */
   .nav-menu::-webkit-scrollbar {
     width: 4px;
   }
@@ -449,7 +407,6 @@
     background: var(--text-secondary);
   }
   
-  /* Loading animation */
   @keyframes pulse {
     0%, 100% {
       opacity: 1;

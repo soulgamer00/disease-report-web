@@ -1,16 +1,12 @@
 <!-- frontend/src/routes/dashboard/+layout.svelte -->
-<!-- ✅ Dashboard protected layout -->
-<!-- Wraps all dashboard pages with authentication check -->
+<!-- ✅ MINIMAL FIX - เก็บโครงสร้างเดิม แค่เปลี่ยน userStore เป็น authStore -->
 
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { userStore } from '$lib/stores/user.store';
+  import { authStore } from '$lib/stores/auth.store'; // ✅ เปลี่ยนจาก userStore
   import type { LayoutData } from './$types';
   
-  // ============================================
-  // PROPS
-  // ============================================
-  
+  // Props (เหมือนเดิม)
   interface Props {
     children: import('svelte').Snippet;
     data: LayoutData;
@@ -18,38 +14,28 @@
   
   let { children, data }: Props = $props();
   
-  // ============================================
-  // REACTIVE STATE
-  // ============================================
-  
+  // State (เหมือนเดิม)
   let mounted = $state(false);
   
-  // ============================================
-  // LIFECYCLE
-  // ============================================
-  
+  // Lifecycle
   onMount(() => {
     console.log('🔐 Dashboard layout mounted');
     console.log('📋 Layout data:', data);
     
-    // Initialize user store if needed
-    if (!userStore.getCurrentState().isAuthenticated) {
-      userStore.init();
-    }
+    // ✅ แค่เปลี่ยนบรรทัดนี้ - sync auth store กับ server data
+    authStore.initializeFromServer({
+      user: data.user,
+      isAuthenticated: data.isAuthenticated
+    });
     
     mounted = true;
   });
 </script>
 
-<!-- ============================================ -->
-<!-- DASHBOARD LAYOUT -->
-<!-- ============================================ -->
-
+<!-- Layout เหมือนเดิมทุกอย่าง -->
 {#if mounted}
-  <!-- Dashboard content -->
   {@render children()}
 {:else}
-  <!-- Loading state while initializing -->
   <div class="min-h-screen flex items-center justify-center" 
        style="background-color: var(--surface-secondary);">
     <div class="text-center">
@@ -61,10 +47,7 @@
   </div>
 {/if}
 
-<!-- ============================================ -->
-<!-- STYLES -->
-<!-- ============================================ -->
-
+<!-- Styles เหมือนเดิม -->
 <style>
   @keyframes spin {
     from {
