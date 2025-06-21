@@ -204,7 +204,7 @@
           <div class="flex items-center gap-2 mt-2">
             <div class="w-2 h-2 rounded-full {backendConnected ? 'bg-green-500' : 'bg-red-500'}"></div>
             <span class="text-xs" style="color: var(--text-secondary);">
-              {backendConnected ? 'เชื่อมต่อ Backend' : 'ใช้ข้อมูล Fallback'}
+              {backendConnected ? 'Online' : 'ใช้ข้อมูล Fallback'}
             </span>
           </div>
         </div>

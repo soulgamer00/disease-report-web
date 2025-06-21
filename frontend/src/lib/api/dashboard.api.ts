@@ -71,8 +71,8 @@ export const dashboardAPI = {
       // Get hospital count (assuming we have this endpoint)
       let totalHospitals = 0;
       try {
-        const hospitalsResponse = await apiClient.get<any[]>('/reports/hospitals');
-        totalHospitals = hospitalsResponse.data?.length || 0;
+        const hospitalsResponse = await apiClient.get<any[]>('/hospitals');
+        totalHospitals = hospitalsResponse.data?.hospitals?.length || 0;
       } catch (error) {
         console.warn('Could not fetch hospital count:', error);
       }
